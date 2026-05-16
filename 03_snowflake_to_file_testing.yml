@@ -1,0 +1,147 @@
+metadataConfig:
+  label: SNOWFLAKE_TO_FILE_TEST
+
+  sourceMetadataRef:
+    - name: SNOWFLAKE_CUSTOMER
+      numberOfAttributes: 5
+      attributes:
+        - attributeName: CUSTOMER_ID
+        - attributeName: CUSTOMER_NAME
+        - attributeName: COUNTRY_CODE
+        - attributeName: IS_ACTIVE
+        - attributeName: UPDATED_AT
+
+  targetMetadataRef:
+    - name: MDDI_CUSTOMER_OUT_SF
+      numberOfAttributes: 5
+      attributes:
+        - attributePosition: 1
+          attributeName: CUSTOMER_ID
+          attributeType: number
+          attributeLength: 10
+          precision: 0
+        - attributePosition: 2
+          attributeName: CUSTOMER_NAME
+          attributeType: string
+          attributeLength: 100
+          precision: 0
+        - attributePosition: 3
+          attributeName: COUNTRY_CODE
+          attributeType: string
+          attributeLength: 5
+          precision: 0
+        - attributePosition: 4
+          attributeName: IS_ACTIVE
+          attributeType: number
+          attributeLength: 1
+          precision: 0
+        - attributePosition: 5
+          attributeName: UPDATED_AT
+          attributeType: timestamp
+          attributeLength: 0
+          precision: 0
+    - name: MDDI_CUSTOMER_OUT_SF_2
+      numberOfAttributes: 5
+      attributes:
+        - attributePosition: 1
+          attributeName: CUSTOMER_ID
+          attributeType: number
+          attributeLength: 10
+          precision: 0
+        - attributePosition: 2
+          attributeName: CUSTOMER_NAME
+          attributeType: string
+          attributeLength: 100
+          precision: 0
+        - attributePosition: 3
+          attributeName: COUNTRY_CODE
+          attributeType: string
+          attributeLength: 5
+          precision: 0
+        - attributePosition: 4
+          attributeName: IS_ACTIVE
+          attributeType: number
+          attributeLength: 1
+          precision: 0
+        - attributePosition: 5
+          attributeName: UPDATED_AT
+          attributeType: timestamp
+          attributeLength: 0
+          precision: 0
+
+  dataExtractionRef:
+    - dataSourceType: Database
+      dataSourceName: SNOWFLAKE_CUSTOMER
+      databaseType: SNOWFLAKE
+      sqlQueryRef:
+        isActive: true
+        sqlQuery: |
+          SELECT CUSTOMER_ID, CUSTOMER_NAME, COUNTRY_CODE, IS_ACTIVE, UPDATED_AT
+          FROM PUBLIC.MDDI_CUSTOMER_SRC
+    - dataSourceType: Database
+      dataSourceName: SNOWFLAKE_CUSTOMER_2
+      databaseType: SNOWFLAKE
+      sqlQueryRef:
+        isActive: true
+        sqlQuery: |
+          SELECT CUSTOMER_ID, CUSTOMER_NAME, COUNTRY_CODE, IS_ACTIVE, UPDATED_AT
+          FROM PUBLIC.MDDI_CUSTOMER_SRC
+
+  dataTransformationRef:
+    dataJoinRef:
+      isActive: false
+      joins: []
+    dataFilteringRef:
+      isActive: false
+      filters: []
+    calculatedColumnsRef:
+      isActive: false
+      columns: []
+    lookupRef:
+      isActive: false
+      lookups: []
+    executionSequence: []
+
+  dataLoadRef:
+    - dataLoadTableName: MDDI_CUSTOMER_OUT_SF
+      dataLoadType: File
+      dataLoadFileType: csv
+      dataLoadFolder: ""
+      dataMappingTableName: MDDI_CUSTOMER_OUT_SF
+      dataSourceName: SNOWFLAKE_CUSTOMER
+    - dataLoadTableName: MDDI_CUSTOMER_OUT_SF_2
+      dataLoadType: File
+      dataLoadFileType: csv
+      dataLoadFolder: ""
+      dataMappingTableName: MDDI_CUSTOMER_OUT_SF_2
+      dataSourceName: SNOWFLAKE_CUSTOMER_2
+
+  dataMappingRef:
+    - targetTableName: MDDI_CUSTOMER_OUT_SF
+      attributes:
+        - sourceAttributeName: CUSTOMER_ID
+          targetAttributeName: CUSTOMER_ID
+        - sourceAttributeName: CUSTOMER_NAME
+          targetAttributeName: CUSTOMER_NAME
+        - sourceAttributeName: COUNTRY_CODE
+          targetAttributeName: COUNTRY_CODE
+        - sourceAttributeName: IS_ACTIVE
+          targetAttributeName: IS_ACTIVE
+        - sourceAttributeName: UPDATED_AT
+          targetAttributeName: UPDATED_AT
+    - targetTableName: MDDI_CUSTOMER_OUT_SF_2
+      attributes:
+        - sourceAttributeName: CUSTOMER_ID
+          targetAttributeName: CUSTOMER_ID
+        - sourceAttributeName: CUSTOMER_NAME
+          targetAttributeName: CUSTOMER_NAME
+        - sourceAttributeName: COUNTRY_CODE
+          targetAttributeName: COUNTRY_CODE
+        - sourceAttributeName: IS_ACTIVE
+          targetAttributeName: IS_ACTIVE
+        - sourceAttributeName: UPDATED_AT
+          targetAttributeName: UPDATED_AT
+
+  dataFlowExecutionSequence:
+    - DataExtraction
+    - DataLoad

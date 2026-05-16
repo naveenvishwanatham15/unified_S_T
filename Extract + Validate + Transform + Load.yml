@@ -1,0 +1,192 @@
+metadataConfig:
+  label: TC_E2E_002_Full_Pipeline
+  isActive: true
+  isAuditEnabled: true
+  audit: ""
+
+  versionHistory:
+    - changedOn: "2026-03-06"
+    - changedBy: Tester
+    - changeDescription: Full pipeline with validation
+    - changeApprovedBy: QA
+
+  sourceMetadataRef:
+    - name: COUNTRY
+      numberOfAttributes: 8
+      attributes:
+        - attributeName: COUNTRYID
+          attributeType: integer
+        - attributeName: COUNTRYNAME
+          attributeType: string
+          attributeLength: 50
+        - attributeName: COUNTRYNAMEABBREVIATION
+          attributeType: string
+          attributeLength: 10
+        - attributeName: CURRENCYID
+          attributeType: integer
+        - attributeName: REGIONID
+          attributeType: integer
+        - attributeName: TIMEZONE
+          attributeType: varchar
+          attributeLength: 10
+        - attributeName: LATITUDE
+          attributeType: decimal
+          attributeLength: 10
+          precision: 2
+        - attributeName: LONGITUDE
+          attributeType: decimal
+          attributeLength: 10
+          precision: 2
+    - name: REGION
+      numberOfAttributes: 4
+      attributes:
+        - attributeName: REGIONID
+          attributeType: integer
+        - attributeName: CONTINENT
+          attributeType: varchar
+          attributeLength: 30
+        - attributeName: REGION
+          attributeType: varchar
+          attributeLength: 30
+        - attributeName: HEMISPHERE
+          attributeType: varchar
+          attributeLength: 20
+
+  targetMetadataRef:
+    - name: FULL_PIPELINE_OUTPUT
+      numberOfAttributes: 4
+      attributes:
+        - attributePosition: 1
+          attributeName: COUNTRYNAME
+          attributeType: string
+          attributeLength: 50
+          precision: 0
+        - attributePosition: 2
+          attributeName: CONTINENT
+          attributeType: string
+          attributeLength: 30
+          precision: 0
+        - attributePosition: 3
+          attributeName: HEMISPHERE
+          attributeType: string
+          attributeLength: 20
+          precision: 0
+        - attributePosition: 4
+          attributeName: COUNTRY_INFO
+          attributeType: string
+          attributeLength: 100
+          precision: 0
+
+  dataExtractionRef:
+    - dataSourceType: File
+      dataSourceFilePath: ""
+      dataSourceName: COUNTRY.csv
+      sqlQueryRef:
+        isActive: false
+    - dataSourceType: File
+      dataSourceFilePath: ""
+      dataSourceName: REGION.csv
+      sqlQueryRef:
+        isActive: false
+
+  dataValidationRef:
+    isActive: true
+    rules:
+      - sourceName: COUNTRY
+        checkType: NOT_NULL
+        column: COUNTRYID
+        severity: ERROR
+      - sourceName: COUNTRY
+        checkType: NOT_NULL
+        column: COUNTRYNAME
+        severity: ERROR
+      - sourceName: COUNTRY
+        checkType: UNIQUE
+        column: COUNTRYID
+        severity: ERROR
+      - sourceName: COUNTRY
+        checkType: ROW_COUNT
+        column: ""
+        minRows: 1
+        severity: ERROR
+      - sourceName: REGION
+        checkType: NOT_NULL
+        column: REGIONID
+        severity: ERROR
+      - sourceName: REGION
+        checkType: ROW_COUNT
+        column: ""
+        minRows: 1
+        severity: ERROR
+
+  dataTransformationRef:
+    dataJoinRef:
+      isActive: true
+      joins:
+        - id: 1
+          joinType: left
+          joinObjectName: JOIN_RESULT
+          sourceName: ["COUNTRY", "REGION"]
+          joinCriteria: REGIONID = REGIONID
+          filterCriteria: ""
+          returnAttributes:
+            - COUNTRYNAME
+            - COUNTRYNAMEABBREVIATION
+            - CONTINENT
+            - HEMISPHERE
+
+    dataFilteringRef:
+      isActive: true
+      filters:
+        - id: 1
+          filterName: NORTHERN
+          sourceName: JOIN_RESULT
+          filterCriteria: HEMISPHERE = 'Northern'
+
+    calculatedColumnsRef:
+      isActive: true
+      columns:
+        - id: 1
+          columnCategory: New
+          columnName: COUNTRY_INFO
+          sourceName: NORTHERN
+          dataType: string
+          expression: CONCAT(COUNTRYNAME, ' - ', CONTINENT)
+
+    lookupRef:
+      isActive: false
+      lookups: []
+
+    executionSequence:
+      - DataJoin:
+          join: [1]
+      - DataFiltering:
+          filter: [1]
+      - CalculatedColumns:
+          calculation: [1]
+
+  dataLoadRef:
+    - dataLoadTableName: FULL_PIPELINE_OUTPUT
+      dataLoadType: File
+      dataLoadFileType: csv
+      dataLoadFolder: ""
+      dataMappingTableName: FULL_PIPELINE_OUTPUT
+      dataSourceName: NORTHERN
+
+  dataMappingRef:
+    - targetTableName: FULL_PIPELINE_OUTPUT
+      attributes:
+        - sourceAttributeName: COUNTRYNAME
+          targetAttributeName: COUNTRYNAME
+        - sourceAttributeName: CONTINENT
+          targetAttributeName: CONTINENT
+        - sourceAttributeName: HEMISPHERE
+          targetAttributeName: HEMISPHERE
+        - sourceAttributeName: COUNTRY_INFO
+          targetAttributeName: COUNTRY_INFO
+
+  dataFlowExecutionSequence:
+    - DataExtraction
+    - DataValidation
+    - DataTransformation
+    - DataLoad
