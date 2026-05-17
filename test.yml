@@ -1,0 +1,478 @@
+metadataConfig:
+  label: m_WD_EMPLOYEE_MASTER
+  isActive: true
+  isAuditEnabled: true
+  audit: ''
+  versionHistory:
+    - changedOn: '2026-05-08'
+    - changedBy: MDDIFramework
+    - changeDescription: >
+        Reads EmployeeMaster.csv and loads into WD_EMPL_MASTER (SQL Server).
+        Exact 1:1 migration of Informatica mapping m_WD_EMPLOYEE_MASTER.
+        Execution order mirrors XML flow:
+          SQ -> exp_EMPL_MASTER -> fil_HEADER -> exp_EMPLOYEE_MASTER
+          -> lkp_COUNTRY_CODE (x2) -> exp_TARGET -> WD_EMPL_MASTER
+    - changeApprovedBy: ''
+
+  # ── Source schema (49 fields from EmployeeMaster.csv) ──────────────────────
+  sourceMetadataRef:
+    - name: EmployeeMaster
+      numberOfAttributes: 49
+      attributes:
+        - {attributeName: EMPLID_TFS,       attributeType: string,  attributeLength: 8,   nullable: false}
+        - {attributeName: EMPLID,           attributeType: string,  attributeLength: 8,   nullable: false}
+        - {attributeName: LAST_NAME,        attributeType: string,  attributeLength: 21,  nullable: true}
+        - {attributeName: MIDDLE_NAME,      attributeType: string,  attributeLength: 13,  nullable: true}
+        - {attributeName: FIRST_NAME,       attributeType: string,  attributeLength: 19,  nullable: true}
+        - {attributeName: LAST_NAME_PRF,    attributeType: string,  attributeLength: 15,  nullable: true}
+        - {attributeName: FIRST_NAME_PRF,   attributeType: string,  attributeLength: 18,  nullable: true}
+        - {attributeName: EMPL_STATUS,      attributeType: string,  attributeLength: 1,   nullable: true}
+        - {attributeName: REG_TEMP,         attributeType: string,  attributeLength: 1,   nullable: true}
+        - {attributeName: FULL_PART_TIME,   attributeType: string,  attributeLength: 9,   nullable: true}
+        - {attributeName: PERSON_CLASS,     attributeType: string,  attributeLength: 300, nullable: true}
+        - {attributeName: HIRE_DT,          attributeType: string,  attributeLength: 10,  nullable: true}
+        - {attributeName: REHIRE_DT,        attributeType: string,  attributeLength: 10,  nullable: true}
+        - {attributeName: SERVICE_DT,       attributeType: string,  attributeLength: 10,  nullable: true}
+        - {attributeName: TERMINATION_DT,   attributeType: string,  attributeLength: 10,  nullable: true}
+        - {attributeName: SUPERVISOR_ID,    attributeType: string,  attributeLength: 8,   nullable: true}
+        - {attributeName: AFF_BUSN_TITLE,   attributeType: string,  attributeLength: 61,  nullable: true}
+        - {attributeName: JOBCODE,          attributeType: string,  attributeLength: 300, nullable: true}
+        - {attributeName: JOBCODE_DESC,     attributeType: string,  attributeLength: 45,  nullable: true}
+        - {attributeName: DEPTID,           attributeType: string,  attributeLength: 13,  nullable: true}
+        - {attributeName: DEPT_NAME,        attributeType: string,  attributeLength: 500, nullable: true}
+        - {attributeName: SHIFT,            attributeType: string,  attributeLength: 500, nullable: true}
+        - {attributeName: LOCATION,         attributeType: string,  attributeLength: 14,  nullable: true}
+        - {attributeName: LOCATION_NAME,    attributeType: string,  attributeLength: 68,  nullable: true}
+        - {attributeName: LOC_ADDRESS1,     attributeType: string,  attributeLength: 68,  nullable: true}
+        - {attributeName: LOC_ADDRESS2,     attributeType: string,  attributeLength: 27,  nullable: true}
+        - {attributeName: LOC_CITY,         attributeType: string,  attributeLength: 24,  nullable: true}
+        - {attributeName: LOC_STATE,        attributeType: string,  attributeLength: 2,   nullable: true}
+        - {attributeName: LOC_POSTAL,       attributeType: string,  attributeLength: 8,   nullable: true}
+        - {attributeName: LOC_COUNTRY_CODE, attributeType: string,  attributeLength: 24,  nullable: true}
+        - {attributeName: EMAIL_ADDR,       attributeType: string,  attributeLength: 45,  nullable: true}
+        - {attributeName: BUS_PHONE,        attributeType: string,  attributeLength: 28,  nullable: true}
+        - {attributeName: HOM_ADDRESS1,     attributeType: string,  attributeLength: 65,  nullable: true}
+        - {attributeName: HOM_ADDRESS2,     attributeType: string,  attributeLength: 21,  nullable: true}
+        - {attributeName: HOM_ADDRESS3,     attributeType: string,  attributeLength: 2,   nullable: true}
+        - {attributeName: HOM_ADDRESS4,     attributeType: string,  attributeLength: 12,  nullable: true}
+        - {attributeName: HOM_CITY,         attributeType: string,  attributeLength: 28,  nullable: true}
+        - {attributeName: HOM_STATE,        attributeType: string,  attributeLength: 8,   nullable: true}
+        - {attributeName: HOM_POSTAL,       attributeType: string,  attributeLength: 10,  nullable: true}
+        - {attributeName: HOM_COUNTRY_CODE, attributeType: string,  attributeLength: 1,   nullable: true}
+        - {attributeName: AFF_NETWORK_ID,   attributeType: string,  attributeLength: 25,  nullable: true}
+        - {attributeName: PAYGROUP,         attributeType: string,  attributeLength: 1,   nullable: true}
+        - {attributeName: SALARY_GRADE,     attributeType: string,  attributeLength: 1,   nullable: true}
+        - {attributeName: REIM_CURRENCY_CD, attributeType: string,  attributeLength: 3,   nullable: true}
+        - {attributeName: AFF_PURCH_AUTH,   attributeType: string,  attributeLength: 1,   nullable: true}
+        - {attributeName: IS_MANAGER,       attributeType: string,  attributeLength: 1,   nullable: true}
+        - {attributeName: EXECUTIVE_ID,     attributeType: string,  attributeLength: 1,   nullable: true}
+        - {attributeName: BIRTH_MONTH,      attributeType: string,  attributeLength: 3,   nullable: true}
+        - {attributeName: BIRTH_DATE,       attributeType: string,  attributeLength: 2,   nullable: true}
+
+  # ── Target schema (52 fields: WD_EMPL_MASTER SQL Server table) ────────────
+  targetMetadataRef:
+    - name: WD_EMPL_MASTER
+      numberOfAttributes: 52
+      attributes:
+        - {attributePosition: 1,  attributeName: EMPLID,           attributeType: string,    attributeLength: 33,  nullable: false}
+        - {attributePosition: 2,  attributeName: LAST_NAME,        attributeType: string,    attributeLength: 90,  nullable: false}
+        - {attributePosition: 3,  attributeName: MIDDLE_NAME,      attributeType: string,    attributeLength: 90,  nullable: false}
+        - {attributePosition: 4,  attributeName: FIRST_NAME,       attributeType: string,    attributeLength: 90,  nullable: false}
+        - {attributePosition: 5,  attributeName: LAST_NAME_PRF,    attributeType: string,    attributeLength: 90,  nullable: true}
+        - {attributePosition: 6,  attributeName: FIRST_NAME_PRF,   attributeType: string,    attributeLength: 90,  nullable: true}
+        - {attributePosition: 7,  attributeName: EMPL_STATUS,      attributeType: string,    attributeLength: 3,   nullable: false}
+        - {attributePosition: 8,  attributeName: REG_TEMP,         attributeType: string,    attributeLength: 3,   nullable: false}
+        - {attributePosition: 9,  attributeName: FULL_PART_TIME,   attributeType: string,    attributeLength: 20,  nullable: true}
+        - {attributePosition: 10, attributeName: EMPL_CLASS,       attributeType: string,    attributeLength: 300, nullable: true}
+        - {attributePosition: 11, attributeName: CWF_CLASS,        attributeType: string,    attributeLength: 9,   nullable: true}
+        - {attributePosition: 12, attributeName: HIRE_DT,          attributeType: timestamp, attributeLength: 23,  nullable: true}
+        - {attributePosition: 13, attributeName: REHIRE_DT,        attributeType: timestamp, attributeLength: 23,  nullable: true}
+        - {attributePosition: 14, attributeName: SERVICE_DT,       attributeType: timestamp, attributeLength: 23,  nullable: true}
+        - {attributePosition: 15, attributeName: TERMINATION_DT,   attributeType: timestamp, attributeLength: 23,  nullable: true}
+        - {attributePosition: 16, attributeName: SUPERVISOR_ID,    attributeType: string,    attributeLength: 33,  nullable: false}
+        - {attributePosition: 17, attributeName: AFF_BUSN_TITLE,   attributeType: string,    attributeLength: 120, nullable: false}
+        - {attributePosition: 18, attributeName: JOBCODE,          attributeType: string,    attributeLength: 300, nullable: true}
+        - {attributePosition: 19, attributeName: JOBCODE_DESC,     attributeType: string,    attributeLength: 150, nullable: true}
+        - {attributePosition: 20, attributeName: DEPTID,           attributeType: string,    attributeLength: 30,  nullable: false}
+        - {attributePosition: 21, attributeName: DEPT_NAME,        attributeType: string,    attributeLength: 500, nullable: true}
+        - {attributePosition: 22, attributeName: SHIFT,            attributeType: string,    attributeLength: 500, nullable: true}
+        - {attributePosition: 23, attributeName: LOCATION,         attributeType: string,    attributeLength: 30,  nullable: false}
+        - {attributePosition: 24, attributeName: LOCATION_NAME,    attributeType: string,    attributeLength: 90,  nullable: false}
+        - {attributePosition: 25, attributeName: LOC_ADDRESS1,     attributeType: string,    attributeLength: 165, nullable: false}
+        - {attributePosition: 26, attributeName: LOC_ADDRESS2,     attributeType: string,    attributeLength: 165, nullable: false}
+        - {attributePosition: 27, attributeName: LOC_CITY,         attributeType: string,    attributeLength: 90,  nullable: false}
+        - {attributePosition: 28, attributeName: LOC_STATE,        attributeType: string,    attributeLength: 18,  nullable: false}
+        - {attributePosition: 29, attributeName: LOC_POSTAL,       attributeType: string,    attributeLength: 36,  nullable: false}
+        - {attributePosition: 30, attributeName: LOC_COUNTRY_CODE, attributeType: string,    attributeLength: 9,   nullable: false}
+        - {attributePosition: 31, attributeName: EMAIL_ADDR,       attributeType: string,    attributeLength: 210, nullable: true}
+        - {attributePosition: 32, attributeName: WORK_PHONE,       attributeType: string,    attributeLength: 50,  nullable: true}
+        - {attributePosition: 33, attributeName: HOM_ADDRESS1,     attributeType: string,    attributeLength: 165, nullable: true}
+        - {attributePosition: 34, attributeName: HOM_ADDRESS2,     attributeType: string,    attributeLength: 165, nullable: true}
+        - {attributePosition: 35, attributeName: HOM_ADDRESS3,     attributeType: string,    attributeLength: 165, nullable: true}
+        - {attributePosition: 36, attributeName: HOM_ADDRESS4,     attributeType: string,    attributeLength: 165, nullable: true}
+        - {attributePosition: 37, attributeName: HOM_CITY,         attributeType: string,    attributeLength: 90,  nullable: true}
+        - {attributePosition: 38, attributeName: HOM_STATE,        attributeType: string,    attributeLength: 18,  nullable: true}
+        - {attributePosition: 39, attributeName: HOM_POSTAL,       attributeType: string,    attributeLength: 36,  nullable: true}
+        - {attributePosition: 40, attributeName: HOM_COUNTRY_CODE, attributeType: string,    attributeLength: 9,   nullable: true}
+        - {attributePosition: 41, attributeName: AFF_NETWORK_ID,   attributeType: string,    attributeLength: 45,  nullable: false}
+        - {attributePosition: 42, attributeName: PAYGROUP,         attributeType: string,    attributeLength: 50,  nullable: true}
+        - {attributePosition: 43, attributeName: SALARY_GRADE,     attributeType: string,    attributeLength: 3,   nullable: true}
+        - {attributePosition: 44, attributeName: REIM_CURRENCY_CD, attributeType: string,    attributeLength: 3,   nullable: true}
+        - {attributePosition: 45, attributeName: AFF_PURCH_AUTH,   attributeType: string,    attributeLength: 6,   nullable: false}
+        - {attributePosition: 46, attributeName: IS_MANAGER,       attributeType: integer,   attributeLength: 10,  nullable: false}
+        - {attributePosition: 47, attributeName: IS_EXECUTIVE,     attributeType: integer,   attributeLength: 10,  nullable: true}
+        - {attributePosition: 48, attributeName: EXEC_LAST_NAME,   attributeType: string,    attributeLength: 90,  nullable: true}
+        - {attributePosition: 49, attributeName: B_MONTH,          attributeType: string,    attributeLength: 3,   nullable: true}
+        - {attributePosition: 50, attributeName: B_DAY,            attributeType: string,    attributeLength: 2,   nullable: true}
+        - {attributePosition: 51, attributeName: EXECUTIVE_ID,     attributeType: string,    attributeLength: 33,  nullable: true}
+        - {attributePosition: 52, attributeName: TFS_EMPL_ID,      attributeType: string,    attributeLength: 33,  nullable: false}
+
+  # ── Source extraction ───────────────────────────────────────────────────────
+  # Framework derives logical name by stripping extension + uppercasing:
+  # EmployeeMaster.csv  →  temp view: EMPLOYEEMASTER
+  dataExtractionRef:
+    - dataSourceType: File
+      dataSourceFilePath: ''          # set at runtime (or patch in Cell 7 of mddi_run_pipeline.py)
+      dataSourceName: EmployeeMaster.csv
+      sqlQueryRef:
+        isActive: false
+
+  # ── Validation (runs on raw EMPLOYEEMASTER view before transformation) ──────
+  dataValidationRef:
+    isActive: true
+    rules:
+      - sourceName: EMPLOYEEMASTER
+        checkType: ROW_COUNT
+        column: ''
+        minRows: 1
+        severity: ERROR
+      - sourceName: EMPLOYEEMASTER
+        checkType: NOT_NULL
+        column: EMPLID_TFS
+        severity: ERROR
+      - sourceName: EMPLOYEEMASTER
+        checkType: NOT_NULL
+        column: EMPLID
+        severity: ERROR
+
+  # ── Transformation ─────────────────────────────────────────────────────────
+  #
+  # Execution order precisely mirrors Informatica XML connectors:
+  #
+  #   [1] CalculatedColumns [1,2]   ← exp_EMPL_MASTER
+  #         HEADER derivation + empty TERMINATION_DT → NULL (on EMPLOYEEMASTER)
+  #
+  #   [2] DataFiltering [1]         ← fil_HEADER
+  #         Keep only HEADER = 'VALID' rows  →  registers FIL_HEADER view
+  #
+  #   [3] CalculatedColumns [3..51] ← exp_EMPLOYEE_MASTER + exp_TARGET
+  #         Trim all strings, date conversions, FULL_PART_TIME flag,
+  #         TERMINATION_DT complex logic, IS_MANAGER integer cast
+  #         (all on FIL_HEADER, updated in-place sequentially)
+  #
+  #   [4] Lookup [1,2]              ← lkp_EMPL_MASTER_COUNTRY_CODE (x2)
+  #         Lookup 1: HOM_COUNTRY_CODE → ISO_ALPHA3 (registers LKP_HOM_COUNTRY)
+  #         Lookup 2: LOC_COUNTRY_CODE → ISO_ALPHA3 (registers LKP_LOC_COUNTRY)
+  #
+  dataTransformationRef:
+    dataJoinRef:
+      isActive: false
+      joins: []
+
+    dataFilteringRef:
+      isActive: true
+      filters:
+        - id: 1
+          filterName: FIL_HEADER
+          sourceName: EMPLOYEEMASTER
+          # Mirrors fil_HEADER: pass only rows where HEADER = 'VALID'
+          filterCriteria: "HEADER = 'VALID'"
+
+    calculatedColumnsRef:
+      isActive: true
+      columns:
+        # ──────────────────────────────────────────────────────────────────────
+        # GROUP A — exp_EMPL_MASTER stage (on EMPLOYEEMASTER, PRE-filter)
+        # ──────────────────────────────────────────────────────────────────────
+
+        # HEADER derivation: identifies the CSV header row and invalid records
+        # Informatica: DECODE(TRUE, ISNULL(EMPLID),'INVALID', EMPLID='EMPLID','INVALID','VALID')
+        - id: 1
+          sourceName: EMPLOYEEMASTER
+          columnName: HEADER
+          columnCategory: New
+          dataType: string
+          expression: >-
+            CASE
+              WHEN EMPLID IS NULL       THEN 'INVALID'
+              WHEN EMPLID = 'EMPLID'    THEN 'INVALID'
+              ELSE 'VALID'
+            END
+
+        # Early TERMINATION_DT clean-up: empty string → NULL before filter
+        # Informatica: o_Termination_dt = IIF(LTRIM(RTRIM(TERMINATION_DT))='', NULL, TERMINATION_DT)
+        - id: 2
+          sourceName: EMPLOYEEMASTER
+          columnName: TERMINATION_DT
+          columnCategory: Replace
+          dataType: string
+          expression: "CASE WHEN trim(TERMINATION_DT) = '' THEN NULL ELSE TERMINATION_DT END"
+
+        # ──────────────────────────────────────────────────────────────────────
+        # GROUP B — exp_EMPLOYEE_MASTER stage (on FIL_HEADER, POST-filter)
+        #           Trim all string fields  (mirrors LTRIM(RTRIM(x)) for all 41 pass-through fields)
+        # ──────────────────────────────────────────────────────────────────────
+        - {id: 3,  sourceName: FIL_HEADER, columnName: EMPLID_TFS,       columnCategory: Replace, dataType: string, expression: "trim(EMPLID_TFS)"}
+        - {id: 4,  sourceName: FIL_HEADER, columnName: EMPLID,           columnCategory: Replace, dataType: string, expression: "trim(EMPLID)"}
+        - {id: 5,  sourceName: FIL_HEADER, columnName: LAST_NAME,        columnCategory: Replace, dataType: string, expression: "trim(LAST_NAME)"}
+        - {id: 6,  sourceName: FIL_HEADER, columnName: MIDDLE_NAME,      columnCategory: Replace, dataType: string, expression: "trim(MIDDLE_NAME)"}
+        - {id: 7,  sourceName: FIL_HEADER, columnName: FIRST_NAME,       columnCategory: Replace, dataType: string, expression: "trim(FIRST_NAME)"}
+        - {id: 8,  sourceName: FIL_HEADER, columnName: LAST_NAME_PRF,    columnCategory: Replace, dataType: string, expression: "trim(LAST_NAME_PRF)"}
+        - {id: 9,  sourceName: FIL_HEADER, columnName: FIRST_NAME_PRF,   columnCategory: Replace, dataType: string, expression: "trim(FIRST_NAME_PRF)"}
+        - {id: 10, sourceName: FIL_HEADER, columnName: EMPL_STATUS,      columnCategory: Replace, dataType: string, expression: "trim(EMPL_STATUS)"}
+        - {id: 11, sourceName: FIL_HEADER, columnName: REG_TEMP,         columnCategory: Replace, dataType: string, expression: "trim(REG_TEMP)"}
+        - {id: 12, sourceName: FIL_HEADER, columnName: PERSON_CLASS,     columnCategory: Replace, dataType: string, expression: "trim(PERSON_CLASS)"}
+        - {id: 13, sourceName: FIL_HEADER, columnName: SUPERVISOR_ID,    columnCategory: Replace, dataType: string, expression: "trim(SUPERVISOR_ID)"}
+        - {id: 14, sourceName: FIL_HEADER, columnName: AFF_BUSN_TITLE,   columnCategory: Replace, dataType: string, expression: "trim(AFF_BUSN_TITLE)"}
+        - {id: 15, sourceName: FIL_HEADER, columnName: JOBCODE,          columnCategory: Replace, dataType: string, expression: "trim(JOBCODE)"}
+        - {id: 16, sourceName: FIL_HEADER, columnName: JOBCODE_DESC,     columnCategory: Replace, dataType: string, expression: "trim(JOBCODE_DESC)"}
+        - {id: 17, sourceName: FIL_HEADER, columnName: DEPTID,           columnCategory: Replace, dataType: string, expression: "trim(DEPTID)"}
+        - {id: 18, sourceName: FIL_HEADER, columnName: DEPT_NAME,        columnCategory: Replace, dataType: string, expression: "trim(DEPT_NAME)"}
+        - {id: 19, sourceName: FIL_HEADER, columnName: SHIFT,            columnCategory: Replace, dataType: string, expression: "trim(SHIFT)"}
+        - {id: 20, sourceName: FIL_HEADER, columnName: LOCATION,         columnCategory: Replace, dataType: string, expression: "trim(LOCATION)"}
+        - {id: 21, sourceName: FIL_HEADER, columnName: LOCATION_NAME,    columnCategory: Replace, dataType: string, expression: "trim(LOCATION_NAME)"}
+        - {id: 22, sourceName: FIL_HEADER, columnName: LOC_ADDRESS1,     columnCategory: Replace, dataType: string, expression: "trim(LOC_ADDRESS1)"}
+        - {id: 23, sourceName: FIL_HEADER, columnName: LOC_ADDRESS2,     columnCategory: Replace, dataType: string, expression: "trim(LOC_ADDRESS2)"}
+        - {id: 24, sourceName: FIL_HEADER, columnName: LOC_CITY,         columnCategory: Replace, dataType: string, expression: "trim(LOC_CITY)"}
+        - {id: 25, sourceName: FIL_HEADER, columnName: LOC_STATE,        columnCategory: Replace, dataType: string, expression: "trim(LOC_STATE)"}
+        - {id: 26, sourceName: FIL_HEADER, columnName: LOC_POSTAL,       columnCategory: Replace, dataType: string, expression: "trim(LOC_POSTAL)"}
+        - {id: 27, sourceName: FIL_HEADER, columnName: EMAIL_ADDR,       columnCategory: Replace, dataType: string, expression: "trim(EMAIL_ADDR)"}
+        - {id: 28, sourceName: FIL_HEADER, columnName: BUS_PHONE,        columnCategory: Replace, dataType: string, expression: "trim(BUS_PHONE)"}
+        - {id: 29, sourceName: FIL_HEADER, columnName: HOM_ADDRESS1,     columnCategory: Replace, dataType: string, expression: "trim(HOM_ADDRESS1)"}
+        - {id: 30, sourceName: FIL_HEADER, columnName: HOM_ADDRESS2,     columnCategory: Replace, dataType: string, expression: "trim(HOM_ADDRESS2)"}
+        - {id: 31, sourceName: FIL_HEADER, columnName: HOM_ADDRESS3,     columnCategory: Replace, dataType: string, expression: "trim(HOM_ADDRESS3)"}
+        - {id: 32, sourceName: FIL_HEADER, columnName: HOM_ADDRESS4,     columnCategory: Replace, dataType: string, expression: "trim(HOM_ADDRESS4)"}
+        - {id: 33, sourceName: FIL_HEADER, columnName: HOM_CITY,         columnCategory: Replace, dataType: string, expression: "trim(HOM_CITY)"}
+        - {id: 34, sourceName: FIL_HEADER, columnName: HOM_STATE,        columnCategory: Replace, dataType: string, expression: "trim(HOM_STATE)"}
+        - {id: 35, sourceName: FIL_HEADER, columnName: HOM_POSTAL,       columnCategory: Replace, dataType: string, expression: "trim(HOM_POSTAL)"}
+        - {id: 36, sourceName: FIL_HEADER, columnName: AFF_NETWORK_ID,   columnCategory: Replace, dataType: string, expression: "trim(AFF_NETWORK_ID)"}
+        - {id: 37, sourceName: FIL_HEADER, columnName: PAYGROUP,         columnCategory: Replace, dataType: string, expression: "trim(PAYGROUP)"}
+        - {id: 38, sourceName: FIL_HEADER, columnName: SALARY_GRADE,     columnCategory: Replace, dataType: string, expression: "trim(SALARY_GRADE)"}
+        - {id: 39, sourceName: FIL_HEADER, columnName: REIM_CURRENCY_CD, columnCategory: Replace, dataType: string, expression: "trim(REIM_CURRENCY_CD)"}
+        - {id: 40, sourceName: FIL_HEADER, columnName: AFF_PURCH_AUTH,   columnCategory: Replace, dataType: string, expression: "trim(AFF_PURCH_AUTH)"}
+        - {id: 41, sourceName: FIL_HEADER, columnName: EXECUTIVE_ID,     columnCategory: Replace, dataType: string, expression: "trim(EXECUTIVE_ID)"}
+        - {id: 42, sourceName: FIL_HEADER, columnName: BIRTH_MONTH,      columnCategory: Replace, dataType: string, expression: "trim(BIRTH_MONTH)"}
+        - {id: 43, sourceName: FIL_HEADER, columnName: BIRTH_DATE,       columnCategory: Replace, dataType: string, expression: "trim(BIRTH_DATE)"}
+
+        # ──────────────────────────────────────────────────────────────────────
+        # GROUP C — Special transformations (on FIL_HEADER, POST-filter)
+        # ──────────────────────────────────────────────────────────────────────
+
+        # Country codes: trim + UPPER before lookup join key match
+        # Informatica: LTRIM(RTRIM(UPPER(LOC_COUNTRY_CODE)))
+        - id: 44
+          sourceName: FIL_HEADER
+          columnName: LOC_COUNTRY_CODE
+          columnCategory: Replace
+          dataType: string
+          expression: "upper(trim(LOC_COUNTRY_CODE))"
+
+        - id: 45
+          sourceName: FIL_HEADER
+          columnName: HOM_COUNTRY_CODE
+          columnCategory: Replace
+          dataType: string
+          expression: "upper(trim(HOM_COUNTRY_CODE))"
+
+        # Employment type flag
+        # Informatica: IIF(LTRIM(RTRIM(FULL_PART_TIME))='Full time', 'F', 'P')
+        - id: 46
+          sourceName: FIL_HEADER
+          columnName: FULL_PART_TIME
+          columnCategory: Replace
+          dataType: string
+          expression: "CASE WHEN trim(FULL_PART_TIME) = 'Full time' THEN 'F' ELSE 'P' END"
+
+        # Date conversions (Spark uses MM for month; Informatica uses mm)
+        # Informatica: TO_DATE(HIRE_DT, 'yyyy/mm/dd')
+        - id: 47
+          sourceName: FIL_HEADER
+          columnName: HIRE_DT
+          columnCategory: Replace
+          dataType: timestamp
+          expression: "to_date(trim(HIRE_DT), 'yyyy/MM/dd')"
+
+        - id: 48
+          sourceName: FIL_HEADER
+          columnName: SERVICE_DT
+          columnCategory: Replace
+          dataType: timestamp
+          expression: "to_date(trim(SERVICE_DT), 'yyyy/MM/dd')"
+
+        # Termination date complex logic — references REHIRE_DT as string (not yet converted)
+        # Informatica:
+        #   IIF(NOT ISNULL(TERMINATION_DT),
+        #     IIF(NOT ISNULL(REHIRE_DT),
+        #       IIF(TO_DATE(REHIRE_DT,'yyyy/mm/dd') > TO_DATE(TERMINATION_DT,'yyyy/mm/dd'),
+        #         NULL, TO_DATE(TERMINATION_DT,'yyyy/mm/dd'))))
+        # Empty string → NULL already applied in pre-filter stage (id: 2)
+        - id: 49
+          sourceName: FIL_HEADER
+          columnName: TERMINATION_DT
+          columnCategory: Replace
+          dataType: timestamp
+          expression: >-
+            CASE
+              WHEN TERMINATION_DT IS NULL THEN NULL
+              WHEN REHIRE_DT IS NULL      THEN NULL
+              WHEN to_date(trim(REHIRE_DT),     'yyyy/MM/dd')
+                 > to_date(trim(TERMINATION_DT),'yyyy/MM/dd') THEN NULL
+              ELSE to_date(trim(TERMINATION_DT), 'yyyy/MM/dd')
+            END
+
+        # REHIRE_DT date conversion — MUST come after TERMINATION_DT (id 49) uses it as string
+        - id: 50
+          sourceName: FIL_HEADER
+          columnName: REHIRE_DT
+          columnCategory: Replace
+          dataType: timestamp
+          expression: "to_date(trim(REHIRE_DT), 'yyyy/MM/dd')"
+
+        # IS_MANAGER: string → integer
+        # Informatica exp_TARGET: TO_INTEGER(IS_MANAGER_O)
+        - id: 51
+          sourceName: FIL_HEADER
+          columnName: IS_MANAGER
+          columnCategory: Replace
+          dataType: integer
+          expression: "CAST(trim(IS_MANAGER) AS INT)"
+
+    # ── Lookup enrichment — mirrors lkp_EMPL_MASTER_COUNTRY_CODE (x2 instances) ──
+    # joinCriteria: "LOOKUP_COL = SOURCE_COL"
+    #   COUNTRY_NAME = column in WD_COUNTRY_CODE (lookup table)
+    #   HOM_COUNTRY_CODE / LOC_COUNTRY_CODE = column in the source view
+    # returnColumns: ISO_ALPHA3 replaces the country code field with the 3-char ISO code
+    lookupRef:
+      isActive: true
+      lookups:
+        - id: 1
+          lookupName: LKP_HOM_COUNTRY
+          sourceName: FIL_HEADER
+          lookupObjectName: WD_COUNTRY_CODE
+          dataSourceType: Database
+          connection_ref: mssql_lookup        # defined in connections.yml
+          joinType: left
+          joinCriteria: "COUNTRY_NAME = HOM_COUNTRY_CODE"
+          returnColumns:
+            - fromColumn: ISO_ALPHA3
+              asColumn: HOM_COUNTRY_CODE      # overwrites raw code with 3-char ISO alpha
+          cacheEnabled: true
+
+        - id: 2
+          lookupName: LKP_LOC_COUNTRY
+          sourceName: LKP_HOM_COUNTRY         # chain: use output of lookup 1
+          lookupObjectName: WD_COUNTRY_CODE
+          dataSourceType: Database
+          connection_ref: mssql_lookup
+          joinType: left
+          joinCriteria: "COUNTRY_NAME = LOC_COUNTRY_CODE"
+          returnColumns:
+            - fromColumn: ISO_ALPHA3
+              asColumn: LOC_COUNTRY_CODE      # overwrites raw code with 3-char ISO alpha
+          cacheEnabled: true
+
+    executionSequence:
+      # Step 1 — exp_EMPL_MASTER: derive HEADER + clean early TERMINATION_DT
+      - CalculatedColumns:
+          calculation: [1, 2]
+
+      # Step 2 — fil_HEADER: discard header row + invalid records
+      - DataFiltering:
+          filter: [1]
+
+      # Step 3 — exp_EMPLOYEE_MASTER + exp_TARGET: trim, convert, transform
+      - CalculatedColumns:
+          calculation: [3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,
+                        25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,
+                        44,45,46,47,48,49,50,51]
+
+      # Step 4 — lkp_EMPL_MASTER_COUNTRY_CODE (x2 instances)
+      - Lookup:
+          lkp: [1, 2]
+
+  # ── Load ────────────────────────────────────────────────────────────────────
+  # dataSourceName = LKP_LOC_COUNTRY (the last registered temp view after both lookups)
+  dataLoadRef:
+    - dataLoadTableName: WD_EMPL_MASTER
+      dataLoadType: Database
+      connection_ref: mssql_target            # defined in connections.yml
+      writeMode: overwrite                    # Informatica "truncate and insert" equivalent
+      dataSourceName: LKP_LOC_COUNTRY         # temp view produced by the last lookup
+      dataMappingTableName: WD_EMPL_MASTER
+      databaseType: MSSQL                     # informational only; connector resolved via connection_ref
+      dataLoadSchema: dbo
+
+  # ── Column mapping (source view columns → WD_EMPL_MASTER target columns) ──
+  # Only fields that need renaming are listed. Fields with matching names are
+  # also listed for explicitness to document the 1:1 mapping.
+  # CWF_CLASS has no source field → written as NULL by _project_to_target_schema.
+  # IS_EXECUTIVE and EXEC_LAST_NAME are not mapped in Informatica → NULL in target.
+  dataMappingRef:
+    - targetTableName: WD_EMPL_MASTER
+      attributes:
+        - {sourceAttributeName: EMPLID,           targetAttributeName: EMPLID}
+        - {sourceAttributeName: LAST_NAME,         targetAttributeName: LAST_NAME}
+        - {sourceAttributeName: MIDDLE_NAME,       targetAttributeName: MIDDLE_NAME}
+        - {sourceAttributeName: FIRST_NAME,        targetAttributeName: FIRST_NAME}
+        - {sourceAttributeName: LAST_NAME_PRF,     targetAttributeName: LAST_NAME_PRF}
+        - {sourceAttributeName: FIRST_NAME_PRF,    targetAttributeName: FIRST_NAME_PRF}
+        - {sourceAttributeName: EMPL_STATUS,       targetAttributeName: EMPL_STATUS}
+        - {sourceAttributeName: REG_TEMP,          targetAttributeName: REG_TEMP}
+        - {sourceAttributeName: FULL_PART_TIME,    targetAttributeName: FULL_PART_TIME}
+        - {sourceAttributeName: PERSON_CLASS,      targetAttributeName: EMPL_CLASS}       # renamed
+        - {sourceAttributeName: HIRE_DT,           targetAttributeName: HIRE_DT}
+        - {sourceAttributeName: REHIRE_DT,         targetAttributeName: REHIRE_DT}
+        - {sourceAttributeName: SERVICE_DT,        targetAttributeName: SERVICE_DT}
+        - {sourceAttributeName: TERMINATION_DT,    targetAttributeName: TERMINATION_DT}
+        - {sourceAttributeName: SUPERVISOR_ID,     targetAttributeName: SUPERVISOR_ID}
+        - {sourceAttributeName: AFF_BUSN_TITLE,    targetAttributeName: AFF_BUSN_TITLE}
+        - {sourceAttributeName: JOBCODE,           targetAttributeName: JOBCODE}
+        - {sourceAttributeName: JOBCODE_DESC,      targetAttributeName: JOBCODE_DESC}
+        - {sourceAttributeName: DEPTID,            targetAttributeName: DEPTID}
+        - {sourceAttributeName: DEPT_NAME,         targetAttributeName: DEPT_NAME}
+        - {sourceAttributeName: SHIFT,             targetAttributeName: SHIFT}
+        - {sourceAttributeName: LOCATION,          targetAttributeName: LOCATION}
+        - {sourceAttributeName: LOCATION_NAME,     targetAttributeName: LOCATION_NAME}
+        - {sourceAttributeName: LOC_ADDRESS1,      targetAttributeName: LOC_ADDRESS1}
+        - {sourceAttributeName: LOC_ADDRESS2,      targetAttributeName: LOC_ADDRESS2}
+        - {sourceAttributeName: LOC_CITY,          targetAttributeName: LOC_CITY}
+        - {sourceAttributeName: LOC_STATE,         targetAttributeName: LOC_STATE}
+        - {sourceAttributeName: LOC_POSTAL,        targetAttributeName: LOC_POSTAL}
+        - {sourceAttributeName: LOC_COUNTRY_CODE,  targetAttributeName: LOC_COUNTRY_CODE}
+        - {sourceAttributeName: EMAIL_ADDR,        targetAttributeName: EMAIL_ADDR}
+        - {sourceAttributeName: BUS_PHONE,         targetAttributeName: WORK_PHONE}        # renamed
+        - {sourceAttributeName: HOM_ADDRESS1,      targetAttributeName: HOM_ADDRESS1}
+        - {sourceAttributeName: HOM_ADDRESS2,      targetAttributeName: HOM_ADDRESS2}
+        - {sourceAttributeName: HOM_ADDRESS3,      targetAttributeName: HOM_ADDRESS3}
+        - {sourceAttributeName: HOM_ADDRESS4,      targetAttributeName: HOM_ADDRESS4}
+        - {sourceAttributeName: HOM_CITY,          targetAttributeName: HOM_CITY}
+        - {sourceAttributeName: HOM_STATE,         targetAttributeName: HOM_STATE}
+        - {sourceAttributeName: HOM_POSTAL,        targetAttributeName: HOM_POSTAL}
+        - {sourceAttributeName: HOM_COUNTRY_CODE,  targetAttributeName: HOM_COUNTRY_CODE}
+        - {sourceAttributeName: AFF_NETWORK_ID,    targetAttributeName: AFF_NETWORK_ID}
+        - {sourceAttributeName: PAYGROUP,          targetAttributeName: PAYGROUP}
+        - {sourceAttributeName: SALARY_GRADE,      targetAttributeName: SALARY_GRADE}
+        - {sourceAttributeName: REIM_CURRENCY_CD,  targetAttributeName: REIM_CURRENCY_CD}
+        - {sourceAttributeName: AFF_PURCH_AUTH,    targetAttributeName: AFF_PURCH_AUTH}
+        - {sourceAttributeName: IS_MANAGER,        targetAttributeName: IS_MANAGER}
+        - {sourceAttributeName: EXECUTIVE_ID,      targetAttributeName: EXECUTIVE_ID}
+        - {sourceAttributeName: BIRTH_MONTH,       targetAttributeName: B_MONTH}           # renamed
+        - {sourceAttributeName: BIRTH_DATE,        targetAttributeName: B_DAY}             # renamed
+        - {sourceAttributeName: EMPLID_TFS,        targetAttributeName: TFS_EMPL_ID}       # renamed
+        # CWF_CLASS, IS_EXECUTIVE, EXEC_LAST_NAME → not in source → NULL written by schema projection
+
+  dataFlowExecutionSequence:
+    - DataExtraction
+    - DataValidation
+    - DataTransformation
+    - DataLoad
