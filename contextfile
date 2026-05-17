@@ -1,0 +1,737 @@
+
+routerRef:
+
+    isActive: true
+
+    items:
+
+    - routerName: RTR_CUSTOMER_INS_UPD
+
+      sourceName: RTR_CUSTOMER_INS_UPD
+
+      groups:
+
+      - groupName: INPUT
+
+      - groupName: INSERT
+
+        condition: TARGET_FLAG='I'
+
+      - groupName: DEFAULT1
+
+      - groupName: UPDATE
+
+        condition: TARGET_FLAG='U'
+
+  updateStrategyRef:
+
+    isActive: true
+
+    items:
+
+    - updateStrategyName: UPD_INSERT_CUSTOMER
+
+      sourceName: UPD_INSERT_CUSTOMER
+
+      expression: DD_INSERT
+
+      operation: insert
+
+    - updateStrategyName: UPD_UPDATE_CUSTOMER
+
+      sourceName: UPD_UPDATE_CUSTOMER
+
+      expression: DD_UPDATE
+
+      operation: update
+
+Thank you Nivya, for the reference. Since w... by Akhil Raj Neelakandan Selvaraj(UST,IN)
+
+Yaml Review-20260514_160426-Meeting Recording
+14 May 2026, 10:34am
+34m 59s
+
+Naveen Kumar Vishwanatham(UST,IN) started transcription
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   0:03
+Actually, there are a couple of validations are there in that XML.
+Like a...
+Additive conditions.
+Like a...
+Hello, Count.
+not null for employee TFS ID, like that. These are some of the validations which are already defined in that XML file. This is what is actually missing in your YAML file.
+And this data validation is actually needed.
+Indy.
+Execution flow as well, so we need to provide the data validation here.
+in the provided one.
+I couldn't find that one.
+The validation was missing.
+OK, and then...
+Sorry.
+And then comes the...
+Ohh.
+Yeah, this source qualifier, um, this one, it's actually not.
+I'm not able to identify what the what this one will be performing.
+Not sure about that, and the filter. OK, and philtre it, it's fine.
+Here, it's okay, calculated reference. If you can possibly convert everything to SQLs, it will be better. I think for, like previously, there were some UDFs as well, so I think that is also.
+The result, right, Naveen?
+
+Naveen Kumar Vishwanatham(UST,IN)   2:12
+Yes, exactly.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   2:14
+Okay. Okay.
+This is how which we are expecting in the calculator reference.
+And.
+Okay.
+Very good.
+Target and source, there is nothing much changes because just the attribute names are only required there.
+Then the data load, just the data load.
+K.
+Actually, within the data load, our type is correct, so this is also OK.
+I think a couple of things are needed here.
+Now, for the database, um...
+I will give you another file which is having a bit.
+Ohh.
+DSP.
+This is.
+OK, for.
+Yeah, file does not like here, target data of.
+Okay, source name, table mapping, the schema, we need to define the load schema, like the database to which we are going to.
+Insert the table name of that particular.
+The the table name to which the data is being inserted, and the mode.
+Can be like an insert or truncate and insert like that.
+And the database type is it can be like a MSSQL like that we need to show.
+Here, our database type is like, it has to be like, it's okay, but we need to change that too.
+Unless.
+
+Naveen Kumar Vishwanatham(UST,IN)   5:17
+The message query.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   5:19
+Yeah, like that.
+
+Naveen Kumar Vishwanatham(UST,IN)   5:21
+Okay.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   5:23
+Ohh.
+Type is OK.
+This, this one is a pending actually.
+
+Naveen Kumar Vishwanatham(UST,IN)   5:30
+Akhil, can you provide for whatever modification needed? If we have that reference in that same file itself, then it will be helpful to track. Can you paste that in our file?
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   5:39
+Yeah.
+Okay.
+
+Naveen Kumar Vishwanatham(UST,IN)   5:48
+Time in.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   5:50
+Okay, I can paste here.
+
+Naveen Kumar Vishwanatham(UST,IN)   6:02
+This whole schema is missing, and...
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   6:02
+Okay.
+Yeah.
+Data load.
+
+Naveen Kumar Vishwanatham(UST,IN)   6:08
+Data load mode.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   6:09
+No, yeah, that is actually that is required because it can be like default insert, can be truncate or insert like that.
+
+Naveen Kumar Vishwanatham(UST,IN)   6:16
+No.
+Yeah, yeah.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   6:18
+Yeah.
+
+Naveen Kumar Vishwanatham(UST,IN)   6:20
+Yeah.
+So this is regarding data load reference and.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   6:27
+Yes.
+
+Naveen Kumar Vishwanatham(UST,IN)   6:29
+And again, we we have seen.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   6:29
+Just came out.
+Yeah, another thing which missing is data loading and data extract, no, no extraction.
+
+Naveen Kumar Vishwanatham(UST,IN)   6:37
+Data.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   6:40
+So, in extraction, you need to provide like this, I will share that another file, OK?
+
+Sidharth R Nair(UST,IN)   6:48
+I think we are missing out on data validations.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   6:51
+Uh-uh, yes.
+
+Sidharth R Nair(UST,IN)   6:53
+Meta validation.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   6:53
+Okay.
+
+Sidharth R Nair(UST,IN)   6:59
+The data extract we are missing and data validation and extraction data source we are missing on dot CSV.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   7:07
+Yes, with like a not the CSV alone, but the delimiter is a.
+
+Sidharth R Nair(UST,IN)   7:10
+Which file type, which file type, and?
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   7:13
+Yeah, delimiter, a couple of things are there.
+
+Arjun Ravindran(UST,IN)   7:19
+Yeah, so I just want to add something like in the data validation there will be some severity. So if the severity part is like if you are giving it as an error, then from the extraction itself, it's going to be failed. So it does need to be adjusted based on the XML. So that is a critical point if like.
+If it, if we are going to generate based on that, that that need to be also addressed.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   7:45
+Arjun, that actually the provided file doesn't have that data validation, so that is missing in their YAML part.
+
+Arjun Ravindran(UST,IN)   7:54
+Yeah, yeah, that I got it, like, yeah, and so why I said that, like they need to be, like, just kept an understanding, and Naveen, I think you currently you have the access to the code base, right?
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   8:02
+Oh.
+
+Naveen Kumar Vishwanatham(UST,IN)   8:07
+Yeah, yeah, I got the code base.
+
+Arjun Ravindran(UST,IN)   8:10
+So yeah, it will be a great like if you create an MD or something for related to the current code base, then you will get the how, like what kind of keys and how the keys are working. Then you can able to generate from like using that MD, right?
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   8:27
+Yes.
+
+Naveen Kumar Vishwanatham(UST,IN)   8:28
+Yes, I do. Can we have a quick code walkthrough on it?
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   8:37
+Okay.
+I will give it.
+
+Naveen Kumar Vishwanatham(UST,IN)   8:39
+As of now, we'll finish this one and we'll move on to it.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   8:42
+Okay, so, and like I said, the calculated reference actually the columns are there, right? That is not validated, but we will validate it as of now. The criteria are looking good.
+need to validate this because...
+When we execute this lookup, then only we can verify that this is working fine or not. Actually, we stopped in the data extraction part itself because those things are actually missing there.
+So, we couldn't proceed from there, so once that is fixed, we can look on the calculator reference and the execution of other parts.
+At the source code, yeah.
+
+Naveen Kumar Vishwanatham(UST,IN)   9:35
+Akhil, can we, if it is a minimal change, right, can we change the YAML manually and can we see how your system is working? Is it able to pass it and able to load the data kind of test? Can we do it?
+1.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   9:52
+Um...
+Actually, we are having like a working YAML.
+If you need to run the existing one, we can execute that as well.
+
+Naveen Kumar Vishwanatham(UST,IN)   9:59
+Okay.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   10:05
+Like a...
+
+Naveen Kumar Vishwanatham(UST,IN)   10:06
+I mean, the the provided, yeah, Ninan.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   10:07
+So.
+The the new one you have created.
+
+Naveen Kumar Vishwanatham(UST,IN)   10:13
+Yeah, yeah, yeah.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   10:14
+Okay, I will run that. Give me a second.
+Space.
+
+Naveen Kumar Vishwanatham(UST,IN)   10:36
+So this code base isn't available in a UST environment.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   10:42
+No, this is not available in the UST. It is actually in the term of not in the only in the workspace there in their workspace only.
+
+Naveen Kumar Vishwanatham(UST,IN)   10:51
+No, this is the MDDI code, right? This we develop, or is it?
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   10:55
+Right, yes.
+
+Naveen Kumar Vishwanatham(UST,IN)   10:58
+Then, how come it's not available?
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   10:59
+Actually, we...
+We modified, we modified a couple of things.
+And we have a separate code for the term official, because...
+So many things are different in the existing MDT.
+
+Naveen Kumar Vishwanatham(UST,IN)   11:15
+Oh.
+Yeah.
+Okay, if you have a base idea, base code as well, you just find whatever we have generic, right? I think we have changed basically for, but if you have whatever the code base in our USTIN, that is also fine.
+to understand a base idea how we are using that, yeah.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   11:43
+Actually, actually, we can share.
+Yeah, we can actually share the code. You can download it and share it with you. So you can actually execute them in your local machine.
+
+Naveen Kumar Vishwanatham(UST,IN)   11:49
+Okay.
+Oh, okay.
+
+Arjun Ravindran(UST,IN)   11:56
+Yeah, Naveen, like we have provided you full access for that one, so currently we are also working on the same, same one, same file, so you just need to download that zip.
+
+Naveen Kumar Vishwanatham(UST,IN)   12:09
+Yeah, I got the access to this code base, but if I wanted to download it, I am able to download individual files. So I am able to download the whole.
+
+Arjun Ravindran(UST,IN)   12:19
+Yeah, yeah, you can do.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   12:21
+Yeah.
+
+Arjun Ravindran(UST,IN)   12:21
+Yeah, you can able to download I think all the, you just need to right click on the folder path and just extract X like a zip file.
+
+Naveen Kumar Vishwanatham(UST,IN)   12:29
+Okay.
+So we save it into this content and we run the orchestrator.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   12:43
+Yes, give me a second, I will.
+Okay, we need to provide.
+The file name.
+Okay.
+Get a photo.
+
+Naveen Kumar Vishwanatham(UST,IN)   14:11
+Okay, so are we running the exact file that we have given?
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   14:15
+Yes, the the same file.
+
+Naveen Kumar Vishwanatham(UST,IN)   14:17
+Okay, it might give error, right?
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   14:21
+Yeah, actually, it's not actually loading. Give me a second.
+To find that issue.
+Yes.
+Arjun, did you run that file in the...
+Just an environment, sorry, in our known product.
+
+Arjun Ravindran(UST,IN)   15:59
+What happened?
+Like.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   16:01
+Italy.
+It's failing, the file path is missing.
+Was it be not found?
+
+Arjun Ravindran(UST,IN)   16:11
+Resource does not not exist. I think the.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   16:16
+What is the birthday, Roberta?
+
+Arjun Ravindran(UST,IN)   16:20
+When did you put the file? I think it's just need to put in the config part. I just need to give the name is it.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   16:28
+Yeah, I have put that in the config folder.
+It's in the pipeline.
+Here, it's there.
+Not an idea, I just wanted him.
+Employee.
+Maybe.
+EY.
+The same as that.
+
+Arjun Ravindran(UST,IN)   17:57
+Can you just I can just give that name as employee.yaml in the tree name for in the for I think just put only employee right?
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   18:04
+Okay.
+No, IML is there.
+
+Arjun Ravindran(UST,IN)   18:09
+Yeah, I think my e-mail is not there in the name.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   18:14
+Mm.
+Okay, maybe that, yeah.
+Sorry.
+Mistick.
+So it has failed. The text session is empty.
+Because the file doesn't have.
+The proper.
+Extraction differences.
+
+Sidharth R Nair(UST,IN)   19:17
+File extension, I said, because the file extension, I see.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   19:17
+No.
+
+Sidharth R Nair(UST,IN)   19:21
+For what?
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   19:22
+Yes, no, no, if I have to change my thing.
+Uh, let me fix that.
+We copy that from the.
+Employee lookup.
+Almost there, *******.
+Okay, now.
+It's being executing.
+Google things.
+Ohh.
+The Premkumar must have failed.
+K.
+Load reference is empty.
+Home.
+
+Arjun Ravindran(UST,IN)   22:45
+No, I think that's the loading part. I think they haven't written the load part in that.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   22:46
+Yeah, yeah.
+Yeah, the load part is actually having some issues, so the transformation has...
+Uh, completed.
+Cleaning, everything is going fine.
+Data road, couple of things are missing.
+
+Naveen Kumar Vishwanatham(UST,IN)   23:17
+Do we get the list of which are?
+
+Arjun Ravindran(UST,IN)   23:22
+I think I get data transformation is not running.
+
+Naveen Kumar Vishwanatham(UST,IN)   23:26
+Data transformation.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   23:26
+Um...
+
+Arjun Ravindran(UST,IN)   23:28
+Because I at a similar, they have like the alignment is different, right? That that data extraction part is just similar, like the data extraction.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   23:29
+Yes.
+Ohh, yes.
+Ohh, get that.
+Yeah, got it.
+
+Arjun Ravindran(UST,IN)   23:39
+It is not coming under the metadata, metadata config, that's why that transformation is not getting, and then we can leave the data load part because data load currently, maybe they be extracted that from the SQL, currently we are just testing in the CSC right, so that can be ignored.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   23:49
+Yeah, we can.
+Anyway, we can provide you the code. So you can actually just update the file path and just run that. And you can actually verify the output as well.
+
+Naveen Kumar Vishwanatham(UST,IN)   24:09
+Okay, yeah.
+So, can you give a high level understanding on this, Akhil? What it looks for, does it directly pass the key components and get the data and create a PySpark code or how it works?
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   24:32
+Okay, I will give you an understanding of the code. So actually, initially, it take this YAML file and just validate if it's having all the configurations and it's actually the proper schema is there, like indentations are proper.
+
+Naveen Kumar Vishwanatham(UST,IN)   24:33
+Yeah.
+Yeah.
+Yeah.
+Alright.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   24:53
+The YAML integrations are valid, then comes the cheque for the keys.
+
+Naveen Kumar Vishwanatham(UST,IN)   24:53
+Okay.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   25:00
+The main keys are present or not, so that is actually the YML validation.
+
+Naveen Kumar Vishwanatham(UST,IN)   25:00
+Mm.
+Right.
+M.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   25:05
+Once that is completed.
+It will cheque for the...
+Data execution flow sequence. OK, so it actually take all the sequence from this YAML and go to each part, so the data extraction, so data extraction, the particular module for data extraction will be called on.
+
+Naveen Kumar Vishwanatham(UST,IN)   25:16
+Okay.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   25:33
+Data extraction will trigger, like will cheque for the particular key, this data extraction reference, and load all the.
+Things to our data frame.
+
+Naveen Kumar Vishwanatham(UST,IN)   25:52
+Yeah, yeah, okay, yeah.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   25:53
+Okay, cheque for the files. If it's a file, then we will patch that and make it a data frame. If it's a DB with the query, we will take the set of records from that DB and load it as a data frame.
+then we will perform the data validation part.
+
+Naveen Kumar Vishwanatham(UST,IN)   26:11
+Okay.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   26:16
+Okay, there is a separate module for data validation. That part will actually validate all the, here are the rules defined. So based on the rules, it will execute on the particular source. This is an employee master, so that data frame, it.
+Validate their account here, actually miss the column is name is missing.
+Like this, the column ID we need to provide, so this one would be skipped automatically since the column is not there. So, here we have the column name is there and the column like cheque type is not null, so verify that the...
+The provider data frame.
+That column doesn't have no nulls. If it's an null, any of the column has seen null, then we will arise an error and fail.
+Then comes the OK, then we will go to the transformation layer. So here it will actually go for the filtering. Is there any joining? We perform the join on that multiple tables and then the calculated reference based on the rule like a defend here.
+
+Naveen Kumar Vishwanatham(UST,IN)   27:11
+Okay, alright.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   27:31
+Actually, there is a sequence for executing the calculation column, so based on this sequence, it will execute all the IDs and perform on that data frame.
+And after that, the data will be loaded to the particular table or file based on the data load type. So here, the load type is file, so it will be writing to a CSV. Since it is CSV, it is loading to a CSV.
+
+Naveen Kumar Vishwanatham(UST,IN)   27:47
+Okay.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   28:04
+So, once this is completed, it actually write the existing, like, we'll be having a couple of...
+execution logs are there that will be added to our DB or the file and exit it. That's all. That's how the full execution goes on.
+
+Naveen Kumar Vishwanatham(UST,IN)   28:23
+Okay, do we have a schema defined in the code or it just...
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   28:28
+No, we don't have the schema. Only schema is defined in the here.
+
+Naveen Kumar Vishwanatham(UST,IN)   28:31
+Okay.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   28:36
+In the source meta, the schema is defined for the employee master. So based on this, we are performing it.
+
+Naveen Kumar Vishwanatham(UST,IN)   28:41
+Okay.
+Okay, rest of the things it is based on the Yammer.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   28:45
+And, yeah.
+Yes.
+In the code, there is, you couldn't find any schema or anything. Only schema is for our insertion to our pipeline details. Like, we have a separate table. Currently, that is not defined because Unity Catalogue is disabled. So once that is enabled, we will actually insert that to the table. So that is only schema.
+
+Naveen Kumar Vishwanatham(UST,IN)   28:53
+Yeah.
+Yeah.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   29:09
+would be having. That doesn't have any impact on the code. That is just to cheque the pipeline is completed or like what are the status like that. Execution time and all those things.
+
+Naveen Kumar Vishwanatham(UST,IN)   29:14
+Okay.
+Okay.
+Okay.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   29:24
+Regarding the data, no entry will be there.
+
+Naveen Kumar Vishwanatham(UST,IN)   29:29
+Okay.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   29:30
+Yeah.
+I think Thamgeetha has shared all the code with you, so you can actually download that from, yeah, yeah, you can download that code from there as zip.
+
+Naveen Kumar Vishwanatham(UST,IN)   29:37
+Yeah, yeah, yes, I got that first, yeah.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   29:46
+And you can actually.
+Prathapan.
+Test on your local machine.
+
+Naveen Kumar Vishwanatham(UST,IN)   29:54
+Sure, okay, yeah, yeah, we can see.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   29:56
+Yeah.
+By spark is repair.
+Yes, yeah.
+I think the Spark is already installed in your machine, right?
+
+Naveen Kumar Vishwanatham(UST,IN)   30:17
+No.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   30:18
+Okay.
+
+Naveen Kumar Vishwanatham(UST,IN)   30:19
+It's not. Do we need to raise a request for it?
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   30:20
+Okay.
+No, you can actually download from our, you can actually download from that free portal.
+
+Naveen Kumar Vishwanatham(UST,IN)   30:25
+Or, we can.
+Ohh.
+Okay.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   30:31
+There is a internal portal within UST, right? So yeah, company portal. So from there, actually, not from the company portal. There is from the UST.
+
+Naveen Kumar Vishwanatham(UST,IN)   30:33
+Yeah, company portal.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   30:43
+M.
+Where?
+Just cheque for freeware.
+
+Sidharth R Nair(UST,IN)   30:53
+Is it?
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   30:56
+So, from there, you can actually list all the softwares available.
+within UST so you can actually download from there.
+I can set up the Spark.
+
+Naveen Kumar Vishwanatham(UST,IN)   31:12
+Okay.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   31:14
+Yeah.
+Um...
+Oops.
+In the UST score, just search for freeware, and that's all. In the search button, yeah, search box, you can search for freeware, and you can actually get that.
+
+Naveen Kumar Vishwanatham(UST,IN)   31:35
+For example, yeah, yeah.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   31:46
+Yeah, any other questions?
+
+Naveen Kumar Vishwanatham(UST,IN)   31:50
+Not from my side, Nivya, I said that you have any.
+
+Sidharth R Nair(UST,IN)   31:56
+So, I think you were saying about the data validations, right? So, also, if there are any severity from, like, if, if, like, any further inputs, like containing any severity, what will what will be the tool do, like?
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   32:00
+Yes.
+Okay, so there are two kinds of severities. One is warning, one is error. If it's a warning, then it skips and proceeds with the execution. If it's an error, it actually exits from the loop and it's actually stopped the execution. It's failed the process. So there are actually two kinds of severities there.
+
+Sidharth R Nair(UST,IN)   32:14
+Okay.
+Okay.
+Stop the execution.
+Okay.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   32:30
+Error and warning.
+
+Sidharth R Nair(UST,IN)   32:30
+So, so are there any conditions whether the data validation will not be presented in the next week?
+A...
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   32:39
+You can actually skip if it, if the you can actually keep it false.
+
+Sidharth R Nair(UST,IN)   32:42
+Oh, so it is not kept as a mandatory part.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   32:45
+Yeah, it's not mandatory. If that validation is present in the XML, you can provide it. Otherwise, you can skip it if there are like a is active faults like that.
+
+Sidharth R Nair(UST,IN)   32:51
+Okay.
+Okay.
+Okay.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   32:57
+Yeah.
+
+Sidharth R Nair(UST,IN)   33:03
+Yeah.
+
+Nivya Koshy(UST,IN)   33:09
+Can we get a reference file? I mean, quite different keys and not only for this one, but for the newly filed shared files also. The newly shared files have some other commands also, like router map.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   33:24
+Yes, actually, yes, actually, for the...
+The next two XML files, there are router and the maplets are there. So we are actually defining the schema for that only. We haven't confirmed that schema for that. If you have that schema, just provide a sample.
+So, we can make some work on that and provide the exact schema for that, so you can make the configuration like that, like for the maplets and router.
+
+Nivya Koshy(UST,IN)   33:58
+Okay.
+Okay.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   34:06
+Arjun, you have a any?
+sample code for the router and maplets.
+
+Arjun Ravindran(UST,IN)   34:15
+There is no sample code yet, like I need to be completed this enhancement, then I can provide it, like I am also working on that XMLs, so if it is a XML is fully completed into YAML and then able to do, then I can give it as a reference, then they can use it for the third one.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   34:20
+Okay.
+Hmm.
+Okay.
+Okay, great.
+Any other questions, Tim?
+
+Naveen Kumar Vishwanatham(UST,IN)   34:45
+I think we are going.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   34:48
+Okay, great.
+
+Naveen Kumar Vishwanatham(UST,IN)   34:48
+Yeah, thank you so much. Thank you for the work.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   34:50
+Thank you, Naveen. Thank you all.
+
+Arjun Ravindran(UST,IN)   34:52
+Thank you.
+
+Sidharth R Nair(UST,IN)   34:52
+Thanks, David. Bye.
+
+Akhil Raj Neelakandan Selvaraj(UST,IN)   34:53
+Yeah, I go too much. Bye.
+
+Naveen Kumar Vishwanatham(UST,IN)   34:54
+Thanks, bye.
+
+Naveen Kumar Vishwanatham(UST,IN) stopped transcription
+
+
+
+
+1 Like reaction.
+
