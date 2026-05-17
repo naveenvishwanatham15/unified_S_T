@@ -1,0 +1,1153 @@
+# Ultimate Copilot Prompt — IICS PowerCenter XML → MDDI YAML Converter (v5)
+
+> Paste this entire document as the **first message** to Copilot / Cursor / Claude Code. Self-contained spec. Grounded in: (a) three real customer PowerCenter XMLs (`m_WD_EMPLOYEE_MASTER.XML`, `m_CUSTOMER_DIM_LOAD.XML`, `m_PRODUCT_DIM_LOAD.XML`), (b) the hand-crafted reference MDDI YAML (`test.yml`), and (c) team meeting feedback on validation/extraction/load gaps.
+
+---
+
+## 1. Mission
+
+Build a Python service called **`iics_to_yaml_converter`** that converts **Informatica PowerCenter mapping XML** files (POWERMART format, `powrmart.dtd`) into **MDDI YAML** configuration files.
+
+- **Input**: a PowerCenter mapping XML (root `<POWERMART>`).
+- **Output**: an MDDI YAML matching the structure of the reference samples, including `tests/fixtures/golden/employee_master.yaml`.
+- **Delivery**: a **FastAPI** service with `POST /convert` that accepts an XML upload and returns YAML.
+- **Non-negotiable invariants**:
+  1. **Zero semantic data loss.** Every TRANSFORMATION, every TRANSFORMFIELD with EXPRESSION, every TABLEATTRIBUTE, every CONNECTOR is represented — typed where possible, in `extensions` otherwise. Never silently dropped.
+  2. **Execution-order fidelity.** Intra-transformation order in `dataTransformationRef.executionSequence` produces a Spark job that processes data in the same order as the PowerCenter mapping, derived from the CONNECTOR graph.
+  3. **Validation rules from BOTH sources.** Rules declared in the XML (extracted from DECODE/IIF flag patterns) AND rules auto-derived from source field constraints (PK, NOTNULL, plus a default ROW_COUNT per source). Deduplicate by `(source, column, check_type)`, XML origin wins.
+
+---
+
+## 2. Hard Constraints
+
+- **Language**: Python 3.11+
+- **Web framework**: FastAPI + Uvicorn
+- **XML parsing**: `xmltodict` for lossless layer, `lxml` for XPath
+- **YAML emission**: `ruamel.yaml` in round-trip mode, **2-space indent, block style only** (no flow style anywhere)
+- **Graph processing**: `networkx`
+- **Data modelling**: Pydantic v2; every IR node has `extensions: dict[str, Any]`
+- **Templating**: Jinja2
+- **LLM client**: **Groq** via the official OpenAI SDK (`openai`). Model: `openai/gpt-oss-120b`. All LLM calls use function calling with `tool_choice="required"`.
+- **No caching** of any kind.
+- **Testing**: `pytest`, golden-file comparison via ruamel-parsed dict equality.
+- **Packaging**: `uv` with a single `pyproject.toml`.
+- **Config**: `.env` via `pydantic-settings`.
+- **Logging**: `structlog`.
+
+Do NOT introduce: Django, Flask, SQLAlchemy, Celery, Redis, Docker compose, K8s manifests, batch endpoints, audit-storage endpoints, or any caching. **Do NOT emit a `mappletRef` section** — mapplet handling is deferred until the MDDI team publishes the official schema. Mapplet instances route to `UnknownComponent` and surface in `extensions`.
+
+---
+
+## 3. PowerCenter XML Reference (Authoritative)
+
+Tag names, attribute names, and value conventions below come from direct inspection of real customer files. Do not invent variants.
+
+### 3.1 Document skeleton
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE POWERMART SYSTEM "powrmart.dtd">
+<POWERMART CREATION_DATE="..." REPOSITORY_VERSION="...">
+  <REPOSITORY NAME="..." VERSION="..." CODEPAGE="..." DATABASETYPE="...">
+    <FOLDER NAME="..." OWNER="...">
+      <MAPPLET .../>           <!-- zero or more; treated as UnknownComponent -->
+      <SOURCE .../>
+      <TARGET .../>
+      <TRANSFORMATION .../>    <!-- FOLDER-level reusable transformations (REUSABLE="YES") -->
+      <MAPPING NAME="..." DESCRIPTION="..." ISVALID="YES">
+        <TRANSFORMATION .../>  <!-- mapping-local (REUSABLE="NO") -->
+        <INSTANCE .../>
+        <CONNECTOR .../>
+        <TARGETLOADORDER .../>
+      </MAPPING>
+    </FOLDER>
+  </REPOSITORY>
+</POWERMART>
+```
+
+### 3.2 SOURCE element with FLATFILE config
+
+```xml
+<SOURCE NAME="EmployeeMaster" DATABASETYPE="Flat File" DBDNAME="FlatFile">
+  <FLATFILE CODEPAGE="MS1252" DELIMITED="YES" DELIMITERS=","
+            QUOTE_CHARACTER="DOUBLE" ESCAPE_CHARACTER=""
+            NULL_CHARACTER="*" NULLCHARTYPE="ASCII"
+            SKIPROWS="1" STRIPTRAILINGBLANKS="NO"
+            LINESEQUENTIAL="NO" REPEATABLE="NO"
+            CONSECDELIMITERSASONE="NO" MULTIDELIMITERSASAND="YES"/>
+  <TABLEATTRIBUTE NAME="Datetime Format" VALUE="A  19 mm/dd/yyyy hh24:mi:ss"/>
+  <SOURCEFIELD NAME="EMPLID_TFS" DATATYPE="string" LENGTH="8" PRECISION="8" SCALE="0"
+               NULLABLE="NOTNULL" KEYTYPE="PRIMARY KEY" FIELDNUMBER="1"/>
+</SOURCE>
+```
+
+**FLATFILE attributes** that land in `dataExtractionRef[].fileConfig`:
+- `DELIMITERS` → `delimiter`
+- `QUOTE_CHARACTER` (`DOUBLE`/`SINGLE`/`NONE`) → `quoteChar` (`"`/`'`/null)
+- `ESCAPE_CHARACTER` → `escapeChar`
+- `NULL_CHARACTER` → `nullValue`
+- `SKIPROWS` → `skipRows` (int) + derives `hasHeader: true` if > 0
+- `STRIPTRAILINGBLANKS` → `stripTrailingBlanks` (bool)
+- `CODEPAGE` → `codepage`
+
+**TABLEATTRIBUTE `Datetime Format`** → `dataExtractionRef[].fileConfig.datetimeFormat`, with `mm → MM` correction.
+
+**Per SOURCEFIELD**: `NAME`, `DATATYPE`, `LENGTH`, `PRECISION`, `SCALE`, `NULLABLE` (`NULL`/`NOTNULL`), `KEYTYPE` (`PRIMARY KEY`/`NOT A KEY`), `FIELDNUMBER`, `OFFSET`.
+
+`DATABASETYPE` values: `Flat File`, `Oracle`, `Microsoft SQL Server`, `Snowflake`, `ODBC`. Flat-file sources have `<FLATFILE>` child.
+
+### 3.3 TARGET element
+
+Mirrors SOURCE structurally with `<TARGETFIELD>` children.
+
+### 3.4 TRANSFORMATION element
+
+```xml
+<TRANSFORMATION NAME="exp_EMPL_MASTER" TYPE="Expression" REUSABLE="NO">
+  <TRANSFORMFIELD NAME="EMPLID" DATATYPE="string" PORTTYPE="INPUT" PRECISION="33"/>
+  <TRANSFORMFIELD NAME="Header" DATATYPE="string" PORTTYPE="OUTPUT" PRECISION="500"
+                  EXPRESSION="DECODE(TRUE, ISNULL(EMPLID), 'INVALID', EMPLID='EMPLID', 'INVALID', 'VALID')"
+                  EXPRESSIONTYPE="GENERAL"
+                  DEFAULTVALUE="ERROR('transformation error')"/>
+</TRANSFORMATION>
+```
+
+**TYPE values + MDDI routing**:
+
+| TYPE | Routing |
+|---|---|
+| `Source Qualifier` | `dataExtractionRef.sqlQueryRef` if SQL override exists, else pass-through |
+| `Filter` | `dataFilteringRef` (with parallel `dataValidationRef` entry if flag pattern detected — Section 8) |
+| `Expression` | Per-field split into `calculatedColumnsRef` or `dataMappingRef`; scanned for validation patterns; LOCAL VARIABLE ports become their own calcs |
+| `Lookup Procedure` | `lookupRef` |
+| `Joiner` | `dataJoinRef` |
+| `Router` | `routerRef` (new section, Section 12) |
+| `Update Strategy` | `updateStrategyRef` (new section, Section 12) |
+| `Aggregator` | `calculatedColumnsRef` with GROUP BY in `extensions` |
+| `Sequence` / `Sequence Generator` | `calculatedColumnsRef` (New) with `extensions.sequence_config` |
+| `Mapplet` (INSTANCE with `TYPE="MAPPLET"`) | `UnknownComponent` + warning (schema TBD) |
+| `Input Transformation` / `Output Transformation` | Skipped at MAPPING level (internal to mapplet definitions) |
+| `Sorter` / `Normalizer` / `Rank` / `Union` / `Java` / `SQL` / etc. | `UnknownComponent` + warning |
+
+**TRANSFORMFIELD `PORTTYPE` values**: `INPUT`, `OUTPUT`, `INPUT/OUTPUT`, `VARIABLE`, `LOCAL VARIABLE`, `LOOKUP`, `LOOKUP/OUTPUT`, `RETURN`. LOCAL VARIABLE handled per Section 9.
+
+**Filter condition**: `<TABLEATTRIBUTE NAME="Filter Condition" VALUE="Header='VALID'"/>`
+
+**Source Qualifier SQL override**: `<TABLEATTRIBUTE NAME="Sql Query" VALUE="SELECT ..."/>`
+
+**Lookup attributes**:
+```xml
+<TABLEATTRIBUTE NAME="Lookup Sql Override"     VALUE="..."/>
+<TABLEATTRIBUTE NAME="Lookup table name"       VALUE="WD_COUNTRY_CODE"/>
+<TABLEATTRIBUTE NAME="Lookup condition"        VALUE="COUNTRY_NAME = HOM_COUNTRY_CODE"/>
+<TABLEATTRIBUTE NAME="Lookup caching enabled"  VALUE="YES"/>
+<TABLEATTRIBUTE NAME="Connection Information"  VALUE="$Target"/>
+```
+
+`$Target`, `$Source`, `$PMCacheDir` are PowerCenter session parameters — pass through verbatim into YAML (`connection_ref: $Target`).
+
+**Router**:
+```xml
+<TRANSFORMATION TYPE="Router" NAME="RTR_CUSTOMER_INS_UPD">
+  <GROUP NAME="INPUT"    TYPE="INPUT"/>
+  <GROUP NAME="INSERT"   TYPE="OUTPUT"          EXPRESSION="TARGET_FLAG='I'"/>
+  <GROUP NAME="UPDATE"   TYPE="OUTPUT"          EXPRESSION="TARGET_FLAG='U'"/>
+  <GROUP NAME="DEFAULT1" TYPE="OUTPUT/DEFAULT"/>
+</TRANSFORMATION>
+```
+
+**Update Strategy**:
+```xml
+<TRANSFORMATION TYPE="Update Strategy" NAME="UPD_INSERT_CUSTOMER">
+  <TABLEATTRIBUTE NAME="Update Strategy Expression" VALUE="DD_INSERT"/>
+</TRANSFORMATION>
+```
+`DD_INSERT` → `operation: insert`. `DD_UPDATE` → `update`. `DD_DELETE` → `delete`. `DD_REJECT` → `reject`.
+
+**Sequence Generator**:
+```xml
+<TRANSFORMATION TYPE="Sequence" NAME="SQ_CUSTOMER_KEY" REUSABLE="YES">
+  <TRANSFORMFIELD NAME="NEXTVAL" PORTTYPE="OUTPUT"/>
+  <TABLEATTRIBUTE NAME="Start Value"   VALUE="0"/>
+  <TABLEATTRIBUTE NAME="Increment By"  VALUE="1"/>
+  <TABLEATTRIBUTE NAME="Current Value" VALUE="15804062"/>
+</TRANSFORMATION>
+```
+→ calculated column with expression `monotonically_increasing_id() + <Current Value>` and full config preserved in `extensions.sequence_config`.
+
+### 3.5 MAPPING / INSTANCE / CONNECTOR
+
+CONNECTORs are the source of truth for dataflow ordering. Collapse all CONNECTORs to unique `(FROMINSTANCE, TOINSTANCE)` edges; topologically sort. Cycles → fatal error.
+
+---
+
+## 4. View-Name Resolution
+
+Every node produces an output "view" that downstream nodes reference via `sourceName`:
+
+| Node type | Output view name |
+|---|---|
+| Source (file `EmployeeMaster.csv`) | `EMPLOYEEMASTER` (strip extension, uppercase) |
+| Source (database table `dbo.Customer`) | `CUSTOMER` (strip schema, uppercase) |
+| Source Qualifier | upstream source view (pass-through) |
+| Filter (`fil_HEADER`) | `FIL_HEADER` (uppercase instance name) |
+| Expression (`exp_X`) | upstream view (Expressions modify in-place, no new view) |
+| Lookup (with `lookupName: LKP_X`) | `LKP_X` |
+| Joiner (`jnr_X`) | `JNR_X` |
+| Aggregator (`agg_X`) | `AGG_X` |
+| Router (`rtr_X`) | `RTR_X` (single view; group outputs only addressed inside `routerRef`) |
+| Update Strategy (`upd_X`) | `UPD_X` |
+| Sequence Generator | no view; output port feeds downstream Expression |
+| Target | terminus |
+
+---
+
+## 5. Architecture — Seven-Phase Pipeline
+
+```
+Phase 1: Lossless Parse  (xmltodict → nested dict)
+
+Phase 2: Inventory & Structural Classification
+         Walk dict. Map each TRANSFORMATION TYPE via COMPONENT_REGISTRY.
+         Build CONNECTOR DAG via networkx. Build view-name map.
+
+Phase 3: Validation Pattern Extraction  (Section 8)
+         Scan Expressions for DECODE/IIF flag patterns; pair with
+         downstream Filters; decompose into validation rules.
+
+Phase 4: IR Assembly + Expression Translation
+         Per-field routing for Expressions. PowerCenter → Spark SQL.
+         Auto-derive validation rules from SOURCEFIELD constraints.
+         Dedupe XML-origin vs derived rules (XML wins).
+
+Phase 5: Local Variable Resolution  (Section 9)
+         LOCAL VARIABLE / VARIABLE ports become own calcs in declaration
+         order. Downstream output ports reference them by name.
+
+Phase 6: YAML Generation
+         IR → MDDI YAML via Jinja2. Top-level dataFlowExecutionSequence
+         is the fixed four-step list; detailed ordering in
+         dataTransformationRef.executionSequence.
+
+Phase 7: LLM-as-Judge + Self-Correct  (max MAX_CORRECTION_ROUNDS=3)
+```
+
+---
+
+## 6. Filter Intent Classification
+
+| Signal | Intent |
+|---|---|
+| Filter is downstream of a flag-Expression resolved by Validation Pattern Extraction (Section 8) | `dataFilteringRef` AND parallel `dataValidationRef` entries (BOTH emitted, per meeting decision — round-trip fidelity) |
+| Description matches `/(?i)valid\|verify\|check\|quality\|constraint\|invalid\|reject/` AND no flag pattern | `dataValidationRef` only |
+| Filter condition is `IS_NULL(pk_col)` / `NOT ISNULL(pk_col)` / `col IS NULL` on PK or NOTNULL column | `dataValidationRef` |
+| Otherwise | `dataFilteringRef` |
+
+LLM fallback (`classify_filter_intent`) only when none of the above triggers AND `STRICT_CLASSIFICATION=true`.
+
+---
+
+## 7. PowerCenter → Spark SQL Translation
+
+`parser/expression_translator.py`. Lex expressions, walk function-call tree, apply rewrites top-down. **Produce lowercase Spark SQL function names. Use `MM` (not `mm`) for month in date formats.**
+
+| PowerCenter | Spark SQL |
+|---|---|
+| `IIF(c, t, e)` | `CASE WHEN c THEN t ELSE e END` |
+| `IIF(c, t)` | `CASE WHEN c THEN t ELSE NULL END` |
+| `DECODE(x, v1, r1, v2, r2, …, default)` | `CASE WHEN x = v1 THEN r1 WHEN x = v2 THEN r2 … ELSE default END` |
+| `DECODE(TRUE, c1, r1, c2, r2, …, default)` | `CASE WHEN c1 THEN r1 WHEN c2 THEN r2 … ELSE default END` |
+| `ISNULL(x)` / `IS_NULL(x)` | `x IS NULL` |
+| `NOT ISNULL(x)` / `NOT IS_NULL(x)` | `x IS NOT NULL` |
+| `NVL(x, y)` | `COALESCE(x, y)` |
+| `LTRIM(RTRIM(x))` / `RTRIM(LTRIM(x))` | `trim(x)` |
+| `LTRIM(x)` / `RTRIM(x)` | `ltrim(x)` / `rtrim(x)` |
+| `UPPER(x)` / `LOWER(x)` / `INITCAP(x)` | `upper(x)` / `lower(x)` / `initcap(x)` |
+| `SUBSTR(x, start, len)` | `substring(x, start, len)` |
+| `INSTR(s, sub)` | `position(sub in s)` |
+| `LENGTH(x)` | `length(x)` |
+| `CONCAT(a, b)` / `a \|\| b` | `concat(a, b)` |
+| `TO_CHAR(d, 'yyyy/mm/dd')` | `date_format(d, 'yyyy/MM/dd')` |
+| `TO_DATE(s, 'yyyy/mm/dd')` | `to_date(s, 'yyyy/MM/dd')` |
+| `TO_INTEGER(x)` | `CAST(x AS INT)` |
+| `TO_DECIMAL(x, p)` | `CAST(x AS DECIMAL(38, p))` |
+| `TO_NUMBER(x)` | `CAST(x AS NUMERIC)` |
+| `SYSDATE` / `SYSTIMESTAMP` | `current_timestamp()` |
+| `ABS(x)` / `ROUND(x, n)` / `MOD(a, b)` | identical, lowercased |
+| `ERROR('msg')` | Preserve in `extensions.on_error="raise"` |
+| `DD_INSERT` / `DD_UPDATE` / `DD_DELETE` / `DD_REJECT` | Handled at Update Strategy level (Section 12) |
+
+**Date format normalization**: any literal containing `mm/dd`, `dd/mm`, `mm-dd` inside a date function → `mm → MM`. Pre-existing `MM`, `mi`, `MI` left alone.
+
+Functions not in this table → `LLM.translate_expression` fallback. Original PowerCenter expression always preserved on the IR node as `original_expression`.
+
+---
+
+## 8. Validation Pattern Extraction (CRITICAL NEW PHASE)
+
+Validation rules in PowerCenter mappings are encoded as **DECODE/IIF flag patterns**: an Expression computes a `Header`/`Flag`/`Is_Valid` column with branches like `ISNULL(col)` returning `'INVALID'`, followed by a Filter that drops invalid rows. The converter decomposes these back into declarative `dataValidationRef` rules.
+
+### 8.1 Pattern detection algorithm
+
+`parser/validation_extractor.py`:
+
+1. **Scan every Expression's OUTPUT TRANSFORMFIELDs.** For each, check if the EXPRESSION is:
+   - `DECODE(TRUE, <cond1>, <flag1>, <cond2>, <flag2>, ..., <default>)`, OR
+   - Nested `IIF(<cond1>, <flag1>, IIF(<cond2>, <flag2>, ..., <default>))`
+
+   AND the flag values are string literals from this vocabulary (case-insensitive): `'INVALID'`, `'VALID'`, `'REJECT'`, `'ACCEPT'`, `'ERROR'`, `'OK'`, `'PASS'`, `'FAIL'`, `'Y'`, `'N'`, `'1'`, `'0'`.
+
+2. **Find downstream Filter using this flag column.** Walk the CONNECTOR DAG from the Expression's INSTANCE. Look for a Filter INSTANCE downstream whose `Filter Condition` references the flag column (e.g. `Header='VALID'`). If found, confirmed validation pattern.
+
+3. **Decompose each DECODE/IIF branch into a rule.** For each `(condition, flag_value)` pair where the flag indicates rejection:
+   - Apply the deterministic decomposition table below.
+   - If the condition doesn't match, call `LLM.decompose_validation_condition`.
+
+### 8.2 Deterministic condition decomposition
+
+| Condition pattern (after Spark SQL translation) | MDDI rule |
+|---|---|
+| `<col> IS NULL` | `{check_type: NOT_NULL, column: <col>}` |
+| `<col> = '<literal>'` where literal equals the column name (header-row marker) | `{check_type: CUSTOM, column: <col>, parameters: {expression: "<col> <> '<literal>'"}}` |
+| `<col> = '<literal>'` (general) | `{check_type: CUSTOM, column: <col>, parameters: {expression: "<col> <> '<literal>'"}}` |
+| `<col> < <n>` / `<col> > <n>` / `<col> BETWEEN x AND y` | `{check_type: RANGE, column: <col>, parameters: {min: …, max: …}}` |
+| `LENGTH(<col>) <op> <n>` | `{check_type: LENGTH, column: <col>, parameters: {op: …, value: …}}` |
+| `<col> LIKE '<pattern>'` | `{check_type: PATTERN, column: <col>, parameters: {pattern: …}}` |
+| Compound conditions (AND/OR of above) | Split into multiple rules where possible; otherwise `LLM.decompose_validation_condition` |
+| Anything else | `LLM.decompose_validation_condition` fallback |
+
+**Severity**: `ERROR` for branches whose flag is in `{INVALID, REJECT, FAIL, ERROR, N, 0}`. `WARNING` for branches whose flag is `WARNING`. Matches PowerCenter pipeline-execution semantics (rejected rows = pipeline error).
+
+### 8.3 Rule provenance and deduplication
+
+Every `ValidationRule` carries:
+- `origin: "xml" | "derived"`
+- `xml_source: str` (e.g. `"exp_EMPL_MASTER.Header → fil_HEADER"`) for XML-origin rules
+- `derivation_reason: str` (e.g. `"PK declared in XML"`) for derived rules
+
+Dedupe by `(source_name, column, check_type)`:
+- Both produce same rule → keep `origin: "xml"` (XML wins).
+- Only derivation produces → keep with `origin: "derived"`.
+- Only extraction produces → keep with `origin: "xml"`.
+
+### 8.4 Round-trip preservation
+
+Per meeting decision: emit BOTH the extracted rules in `dataValidationRef` AND keep the Header calculated column + Filter intact in `calculatedColumnsRef` / `dataFilteringRef`. Redundant in execution but preserves round-trip fidelity.
+
+---
+
+## 9. Local Variable Handling
+
+Expression transformations sometimes contain `PORTTYPE="LOCAL VARIABLE"` or `"VARIABLE"` ports — sequential variables computed before output ports.
+
+Example from `mp_JDE_DATE_TO_DATEKEY`:
+```
+v_JULIAN_DATE_CHAR = IIF(in_JULIAN_DATE=0 OR ISNULL(in_JULIAN_DATE), null, TO_CHAR(in_JULIAN_DATE))
+out_DATE_CALENDER  = to_date(concat(..., substr(v_JULIAN_DATE_CHAR, ...)), 'YYYYDDD')
+```
+
+### Emission rule
+
+Each LOCAL VARIABLE / VARIABLE port becomes its own `calculatedColumnsRef` entry with `columnCategory: New`, in declaration order. Output ports referencing `v_*` keep the reference as-is (MDDI evaluates calcs sequentially).
+
+`parser/local_variable_resolver.py`:
+1. Sort TRANSFORMFIELDs in the Expression by XML appearance order.
+2. For each LOCAL VARIABLE/VARIABLE port: emit calc with `column_name: <port_name>`, `column_category: New`, `expression: <translated Spark SQL>`, `data_type: <port datatype>`. Mark `extensions.is_local_variable: true`.
+3. For each OUTPUT port referencing a local variable: leave the reference intact.
+
+---
+
+## 10. Auto-Derived Validation Rules
+
+For each `SchemaRef` in `source_metadata`:
+
+1. Emit one `ROW_COUNT minRows: 1` rule per source, severity `ERROR`, `origin: "derived"`, `derivation_reason: "default per-source row count check"`.
+2. For each attribute with `KEYTYPE="PRIMARY KEY"` → emit `NOT_NULL`, severity `ERROR`, `origin: "derived"`, `derivation_reason: "PK declared in XML"`. (UNIQUE is NOT auto-derived.)
+3. For each attribute with `NULLABLE="NOTNULL"` and not already covered as PK → emit `NOT_NULL`, severity `ERROR`, `origin: "derived"`, `derivation_reason: "NOT NULL declared in XML"`.
+
+`sourceName` uses the view name (Section 4). After Phase 4, apply Section 8.3 dedup.
+
+**Important context**: PowerCenter XML has NO native ROW_COUNT element. ROW_COUNT is a converter convention — always emitted by auto-derivation, never extracted from XML. The NULL/NOT-NULL rules are the substantive ones that come from XML constraints.
+
+Configurable via `.env`: `DERIVE_VALIDATION_RULES=true` (default).
+
+---
+
+## 11. LLM Integration (All 5 places kept)
+
+`llm/client.py` — Groq via OpenAI SDK, base URL `https://api.groq.com/openai/v1`, model `openai/gpt-oss-120b`, temperature 0.0, max 5 retries with exponential backoff.
+
+### Tools (function-call schemas in `llm/tools.py`)
+
+**`translate_expression`** — Section 7 fallback for functions not in FUNCTION_MAP.
+In: `powercenter_expression`, `available_columns`, `target_data_type`
+Out: `{spark_sql_expression: str, notes: str, confidence: float}`
+
+**`classify_filter_intent`** — Section 6 fallback.
+In: `transformation_name`, `description`, `condition`, `upstream_schema`, `pk_columns`
+Out: `{intent: "validation|filtering", validation_check_type: str?, confidence: float, rationale: str}`
+
+**`decompose_validation_condition`** — Section 8.2 fallback.
+In: `condition_expression`, `flag_value`, `column_schemas`
+Out: `{check_type: str, column: str, parameters: dict, severity: "ERROR|WARNING", confidence: float, rationale: str}`
+
+**`translate_unknown_component`** — for `UnknownComponent`.
+In: `iics_type`, `instance_name`, `raw_dict`, `current_ir_summary`, `mddi_schema_compact`
+Out: `{maps_to_section: str, ir_fragment: dict, warnings: [str], confidence: float, explanation: str}`
+
+**`judge_yaml`** — Phase 7.
+In: `xml_summary`, `produced_yaml`, `rubric_questions`
+Out: `{passed: bool, errors: [{category, detail, location}], confidence: float}`
+
+**`correct_yaml`** — Phase 7.
+In: `original_xml`, `previous_yaml`, `errors_from_judge`
+Out: `{corrected_yaml: str, changes_summary: str}`
+
+Prompts in `llm/prompts.py` embed compact MDDI schema description, the golden YAMLs as few-shot examples (three originals + `employee_master.yaml`), and strict instruction "Respond ONLY by calling the provided tool. Never produce free-form text."
+
+---
+
+## 12. New MDDI Sections: routerRef, updateStrategyRef
+
+Both live inside `dataTransformationRef`. Both skipped when empty.
+
+### 12.1 routerRef
+
+```yaml
+dataTransformationRef:
+  routerRef:
+    isActive: true
+    items:
+      - routerName: RTR_CUSTOMER_INS_UPD
+        sourceName: <UPSTREAM_VIEW>           # upstream view feeding the router
+        groups:
+          - groupName: INPUT
+            groupType: INPUT
+          - groupName: INSERT
+            groupType: OUTPUT
+            condition: "TARGET_FLAG = 'I'"
+          - groupName: UPDATE
+            groupType: OUTPUT
+            condition: "TARGET_FLAG = 'U'"
+          - groupName: DEFAULT1
+            groupType: OUTPUT/DEFAULT
+```
+
+`sourceName` per Section 4 convention: the upstream view feeding the router (consistent with how every other section uses `sourceName`).
+
+### 12.2 updateStrategyRef
+
+```yaml
+dataTransformationRef:
+  updateStrategyRef:
+    isActive: true
+    items:
+      - updateStrategyName: UPD_INSERT_CUSTOMER
+        sourceName: <UPSTREAM_VIEW_OR_ROUTER_OUTPUT>
+        routerGroup: RTR_CUSTOMER_INS_UPD.INSERT      # explicit link if fed by a router; null otherwise
+        expression: DD_INSERT
+        operation: insert                              # insert | update | delete | reject
+      - updateStrategyName: UPD_UPDATE_CUSTOMER
+        sourceName: <UPSTREAM_VIEW_OR_ROUTER_OUTPUT>
+        routerGroup: RTR_CUSTOMER_INS_UPD.UPDATE
+        expression: DD_UPDATE
+        operation: update
+```
+
+`routerGroup` is the explicit upstream-router link (avoids ambiguity from the DAG topology). `sourceName` is the upstream view (router output or other).
+
+### 12.3 dataTransformationRef.executionSequence
+
+Extended to include router and update strategy entries:
+
+```yaml
+executionSequence:
+  - CalculatedColumns:
+      calculation: [1, 2]
+  - DataFiltering:
+      filter: [1]
+  - Lookup:
+      lkp: [1, 2]
+  - Router:
+      router: [1]
+  - UpdateStrategy:
+      updateStrategy: [1, 2]
+```
+
+Each entry references the `id`/order of items within its respective sub-block.
+
+---
+
+## 13. MDDI YAML Output Rules
+
+Match the reference samples exactly, especially `tests/fixtures/golden/employee_master.yaml`.
+
+### 13.1 Top-level structure
+
+```yaml
+metadataConfig:
+  label: <MAPPING NAME>
+  isActive: true
+  isAuditEnabled: true
+  audit: ''
+  versionHistory:
+    - changedOn: '<YYYY-MM-DD>'           # from POWERMART CREATION_DATE
+    - changedBy: <repository owner>
+    - changeDescription: <MAPPING DESCRIPTION>
+    - changeApprovedBy: ''
+
+  sourceMetadataRef: [...]
+  targetMetadataRef: [...]
+  dataExtractionRef: [...]
+  dataValidationRef: { isActive: true, rules: [...] }
+  dataTransformationRef:
+    dataJoinRef:          { isActive: <bool>, joins: [...] }
+    dataFilteringRef:     { isActive: <bool>, filters: [...] }
+    calculatedColumnsRef: { isActive: <bool>, columns: [...] }
+    lookupRef:            { isActive: <bool>, lookups: [...] }
+    routerRef:            { isActive: <bool>, items: [...] }
+    updateStrategyRef:    { isActive: <bool>, items: [...] }
+    executionSequence: [...]
+  dataLoadRef: [...]
+  dataMappingRef: [...]
+
+  dataFlowExecutionSequence:
+    - DataExtraction
+    - DataValidation
+    - DataTransformation
+    - DataLoad
+```
+
+Top-level `dataFlowExecutionSequence` is always the four-step fixed order. Include `DataValidation` only if rules exist. Include `DataTransformation` only if any sub-block is active. Always include `DataExtraction` and `DataLoad`.
+
+### 13.2 sourceMetadataRef / targetMetadataRef
+
+- `numberOfAttributes` = count of `attributes`.
+- Attributes listed in `FIELDNUMBER` order (sources) / `attributePosition` order (targets).
+- `attributeType` normalized: `string`, `integer`, `number`, `decimal`, `timestamp`, `date`. Map: `string|nstring` → `string`, `integer|small integer|bigint` → `integer`, `decimal|double|real` → `decimal`, `date/time` → `timestamp`.
+- `nullable: false` when `NULLABLE="NOTNULL"`.
+
+### 13.3 dataExtractionRef
+
+```yaml
+dataExtractionRef:
+  - dataSourceType: File
+    dataSourceFilePath: ''
+    dataSourceName: EmployeeMaster.csv
+    fileConfig:
+      delimiter: ','
+      quoteChar: '"'
+      escapeChar: ''
+      nullValue: '*'
+      skipRows: 1
+      hasHeader: true
+      stripTrailingBlanks: false
+      codepage: MS1252
+      datetimeFormat: 'MM/dd/yyyy HH:mm:ss'
+    sqlQueryRef:
+      isActive: false
+```
+
+For database sources: `dataSourceType: Database`, add `databaseType: <ORACLE|MSSQL|SNOWFLAKE|POSTGRES>` and `connection_ref` (passes through `$Source` etc.).
+
+### 13.4 dataValidationRef
+
+```yaml
+dataValidationRef:
+  isActive: true
+  rules:
+    - sourceName: EMPLOYEEMASTER
+      checkType: ROW_COUNT
+      column: ''
+      minRows: 1
+      severity: ERROR
+    - sourceName: EMPLOYEEMASTER
+      checkType: NOT_NULL
+      column: EMPLID_TFS
+      severity: ERROR
+    - sourceName: EMPLOYEEMASTER
+      checkType: NOT_NULL
+      column: EMPLID
+      severity: ERROR
+    - sourceName: EMPLOYEEMASTER
+      checkType: CUSTOM
+      column: EMPLID
+      parameters:
+        expression: "EMPLID <> 'EMPLID'"
+      severity: ERROR
+```
+
+Omit the entire block when no rules exist. `origin` and `xml_source`/`derivation_reason` are NOT emitted in the YAML (they live in the IR/audit only).
+
+### 13.5 dataTransformationRef
+
+```yaml
+dataTransformationRef:
+  dataJoinRef:
+    isActive: <bool>
+    joins:
+      - id: 1
+        joinObjectName: <JOIN_RESULT>
+        sourceName: ["<UPSTREAM_A>", "<UPSTREAM_B>"]
+        joinType: left
+        joinCriteria: "<spark sql condition>"
+        filterCriteria: ''
+        returnAttributes: [...]
+
+  dataFilteringRef:
+    isActive: <bool>
+    filters:
+      - id: 1
+        filterName: FIL_HEADER
+        sourceName: EMPLOYEEMASTER
+        filterCriteria: "HEADER = 'VALID'"
+
+  calculatedColumnsRef:
+    isActive: <bool>
+    columns:
+      - id: 1
+        sourceName: EMPLOYEEMASTER
+        columnName: HEADER
+        columnCategory: New                    # New | Replace
+        dataType: string
+        expression: |-
+          CASE
+            WHEN EMPLID IS NULL    THEN 'INVALID'
+            WHEN EMPLID = 'EMPLID' THEN 'INVALID'
+            ELSE 'VALID'
+          END
+
+  lookupRef:
+    isActive: <bool>
+    lookups:
+      - id: 1
+        lookupName: LKP_HOM_COUNTRY
+        sourceName: FIL_HEADER
+        lookupObjectName: WD_COUNTRY_CODE
+        dataSourceType: Database
+        connection_ref: $Target
+        joinType: left
+        joinCriteria: "COUNTRY_NAME = HOM_COUNTRY_CODE"
+        returnColumns:
+          - fromColumn: ISO_ALPHA3
+            asColumn: HOM_COUNTRY_CODE
+        cacheEnabled: true
+
+  routerRef:
+    isActive: <bool>
+    items: [...]               # see Section 12.1
+
+  updateStrategyRef:
+    isActive: <bool>
+    items: [...]               # see Section 12.2
+
+  executionSequence: [...]     # see Section 12.3
+```
+
+Lookup chaining via `sourceName`: lookup 2 with `sourceName: LKP_HOM_COUNTRY` chains off lookup 1's output.
+
+### 13.6 dataLoadRef
+
+For File targets:
+```yaml
+dataLoadRef:
+  - dataLoadTableName: <TARGET_NAME>
+    dataLoadType: File
+    dataLoadFileType: csv
+    dataLoadFolder: ''
+    dataMappingTableName: <TARGET_NAME>
+    dataSourceName: <last upstream view name>
+    writeMode: overwrite
+```
+
+For Database targets:
+```yaml
+dataLoadRef:
+  - dataLoadTableName: WD_EMPL_MASTER
+    dataLoadType: Database
+    connection_ref: $Target
+    writeMode: overwrite
+    dataSourceName: LKP_LOC_COUNTRY
+    dataMappingTableName: WD_EMPL_MASTER
+    databaseType: MSSQL
+    dataLoadSchema: dbo
+```
+
+**Full set of `writeMode` values**: `insert`, `append`, `overwrite`, `update`, `upsert`, `truncate-and-insert`.
+
+How to choose:
+- No Update Strategy upstream → `overwrite` (matches `test.yml`)
+- Single Update Strategy upstream with DD_INSERT → `insert`
+- Single Update Strategy with DD_UPDATE → `update`
+- Multiple Update Strategies (Router → INSERT+UPDATE pattern) → emit one `dataLoadRef` per target, each pointing to its respective Update Strategy via `dataSourceName`
+
+`dataSourceName` is the output view of the **last transformation INSTANCE** in topological order before the target.
+
+### 13.7 dataMappingRef
+
+```yaml
+dataMappingRef:
+  - targetTableName: WD_EMPL_MASTER
+    attributes:
+      - sourceAttributeName: EMPLID
+        targetAttributeName: EMPLID
+      - sourceAttributeName: PERSON_CLASS
+        targetAttributeName: EMPL_CLASS         # rename
+```
+
+Built from CONNECTORs whose `TOINSTANCETYPE="Target Definition"`. Target fields with no incoming CONNECTOR are omitted.
+
+### 13.8 YAML style
+
+- **Block style only.** Never use flow style (`{key: val}`).
+- 2-space indent.
+- Single-quote strings unless they contain single quotes.
+- Multi-line expressions use `|-` literal block scalar.
+- No anchors, no aliases.
+
+---
+
+## 14. LLM-as-Judge Rubric
+
+`judge/rubric.py`. Mostly deterministic with LLM for semantic checks.
+
+| # | Check | Type |
+|---|---|---|
+| 1 | YAML valid against MDDI JSON Schema | deterministic |
+| 2 | Every `<SOURCE>` appears in `sourceMetadataRef`; `numberOfAttributes` matches | deterministic |
+| 3 | Every `<TARGET>` appears in `targetMetadataRef` | deterministic |
+| 4 | Every `<TRANSFORMATION>` instance contributes to the IR (or is `UnknownComponent`) | deterministic |
+| 5 | Every CONNECTOR feeding a target appears in `dataMappingRef` | deterministic |
+| 6 | All `expression:` values are valid Spark SQL (no `IIF`/`DECODE`/`ISNULL`/`DD_*` leakage; no lowercase `mm` in date formats) | regex + LLM |
+| 7 | `dataTransformationRef.executionSequence` is a topological order of the CONNECTOR DAG | deterministic |
+| 8 | Every calc's `sourceName` references a valid upstream view in `view_name_map` | deterministic |
+| 9 | Every `lookupRef.sourceName` references upstream view or prior lookup | deterministic |
+| 10 | `dataLoadRef.dataSourceName` references the last view in the topological chain | deterministic |
+| 11 | `numberOfAttributes` matches `len(attributes)` for every schema | deterministic |
+| 12 | Top-level `dataFlowExecutionSequence` is the four canonical step names in canonical order | deterministic |
+| 13 | All validation rules have either `origin: xml` audit trail or `derivation_reason` audit trail | deterministic (IR check) |
+| 14 | Every router output group referenced by an `updateStrategyRef.routerGroup` exists | deterministic |
+| 15 | XML-extracted validation rules deduped correctly against auto-derived | deterministic |
+
+Failed items → structured errors → `correct_yaml`. Max `MAX_CORRECTION_ROUNDS=3`.
+
+---
+
+## 15. Intermediate Representation
+
+`iics_to_yaml_converter/ir/models.py`. Every node has `extensions: dict[str, Any] = Field(default_factory=dict)`.
+
+```python
+class Attribute(BaseModel):
+    name: str
+    data_type: str | None = None
+    length: int | None = None
+    precision: int | None = None
+    scale: int | None = None
+    position: int | None = None
+    nullable: bool = True
+    is_primary_key: bool = False
+    extensions: dict[str, Any] = Field(default_factory=dict)
+
+class SchemaRef(BaseModel):
+    name: str
+    view_name: str
+    database_type: str | None = None
+    attributes: list[Attribute]
+    extensions: dict[str, Any] = Field(default_factory=dict)
+
+class FileConfig(BaseModel):
+    delimiter: str = ','
+    quote_char: str | None = '"'
+    escape_char: str = ''
+    null_value: str = ''
+    skip_rows: int = 0
+    has_header: bool = False
+    strip_trailing_blanks: bool = False
+    codepage: str | None = None
+    datetime_format: str | None = None
+    extensions: dict[str, Any] = Field(default_factory=dict)
+
+class DataSource(BaseModel):
+    source_type: Literal["File", "Database", "API"]
+    name: str
+    view_name: str
+    file_name: str | None = None
+    file_path: str | None = None
+    file_config: FileConfig | None = None
+    database_type: str | None = None
+    connection_ref: str | None = None
+    sql_query: str | None = None
+    extensions: dict[str, Any] = Field(default_factory=dict)
+
+class JoinSpec(BaseModel):
+    id: int
+    join_object_name: str
+    source_names: list[str]
+    join_type: Literal["inner", "left", "right", "outer"] = "left"
+    join_criteria: str
+    filter_criteria: str = ""
+    return_attributes: list[str]
+    extensions: dict[str, Any] = Field(default_factory=dict)
+
+class FilterSpec(BaseModel):
+    id: int
+    name: str
+    source_name: str
+    criteria: str
+    intent: Literal["validation", "filtering"]
+    extensions: dict[str, Any] = Field(default_factory=dict)
+
+class CalculatedColumnSpec(BaseModel):
+    id: int
+    source_name: str
+    column_name: str
+    column_category: Literal["New", "Replace"]
+    data_type: str
+    expression: str
+    original_expression: str
+    origin_instance: str
+    extensions: dict[str, Any] = Field(default_factory=dict)
+
+class ReturnColumn(BaseModel):
+    from_column: str
+    as_column: str
+
+class LookupSpec(BaseModel):
+    id: int
+    lookup_name: str
+    source_name: str
+    lookup_object_name: str
+    data_source_type: Literal["File", "Database"]
+    connection_ref: str | None = None
+    join_type: Literal["inner", "left", "right"] = "left"
+    join_criteria: str
+    return_columns: list[ReturnColumn]
+    cache_enabled: bool = True
+    extensions: dict[str, Any] = Field(default_factory=dict)
+
+class RouterGroup(BaseModel):
+    group_name: str
+    group_type: Literal["INPUT", "OUTPUT", "OUTPUT/DEFAULT"]
+    condition: str | None = None
+
+class RouterSpec(BaseModel):
+    id: int
+    router_name: str
+    source_name: str
+    groups: list[RouterGroup]
+    extensions: dict[str, Any] = Field(default_factory=dict)
+
+class UpdateStrategySpec(BaseModel):
+    id: int
+    update_strategy_name: str
+    source_name: str
+    router_group: str | None = None     # "RTR_X.INSERT" if fed by router
+    expression: str                     # "DD_INSERT" / "DD_UPDATE" / etc.
+    operation: Literal["insert", "update", "delete", "reject"]
+    extensions: dict[str, Any] = Field(default_factory=dict)
+
+class ValidationRule(BaseModel):
+    source_name: str
+    check_type: str                     # NOT_NULL | UNIQUE | ROW_COUNT | RANGE | PATTERN | LENGTH | CUSTOM
+    column: str = ""
+    parameters: dict[str, Any] = Field(default_factory=dict)
+    min_rows: int | None = None
+    severity: Literal["ERROR", "WARNING"] = "ERROR"
+    origin: Literal["xml", "derived"]
+    xml_source: str | None = None       # set when origin="xml"
+    derivation_reason: str | None = None# set when origin="derived"
+    extensions: dict[str, Any] = Field(default_factory=dict)
+
+class ExecutionStep(BaseModel):
+    kind: Literal["DataJoin", "DataFiltering", "CalculatedColumns", "Lookup", "Router", "UpdateStrategy"]
+    ids: list[int]
+
+class DataLoadSpec(BaseModel):
+    name: str
+    target_table_name: str
+    load_type: Literal["File", "Database", "Delta"]
+    file_type: str | None = None
+    folder: str = ""
+    data_source_name: str
+    data_mapping_table_name: str
+    connection_ref: str | None = None
+    write_mode: Literal["insert", "append", "overwrite", "update", "upsert", "truncate-and-insert"]
+    database_type: str | None = None
+    schema: str | None = None
+    extensions: dict[str, Any] = Field(default_factory=dict)
+
+class TargetMapping(BaseModel):
+    target_table_name: str
+    attribute_pairs: list[tuple[str, str]]
+    extensions: dict[str, Any] = Field(default_factory=dict)
+
+class DataflowEdge(BaseModel):
+    from_instance: str
+    to_instance: str
+
+class UnknownComponent(BaseModel):
+    iics_type: str
+    instance_name: str
+    raw_dict: dict[str, Any]
+    llm_interpretation: dict | None = None
+    cannot_map: bool = False
+    explanation: str = ""
+
+class Mapping(BaseModel):
+    label: str
+    description: str | None = None
+    is_active: bool = True
+    is_audit_enabled: bool = True
+    version_history: list[dict] = []
+
+    source_metadata: list[SchemaRef]
+    target_metadata: list[SchemaRef]
+
+    data_extraction: list[DataSource]
+    data_validation_rules: list[ValidationRule] = []
+
+    joins: list[JoinSpec] = []
+    filters: list[FilterSpec] = []
+    calculated_columns: list[CalculatedColumnSpec] = []
+    lookups: list[LookupSpec] = []
+    routers: list[RouterSpec] = []
+    update_strategies: list[UpdateStrategySpec] = []
+    transformation_execution_sequence: list[ExecutionStep] = []
+
+    data_load: list[DataLoadSpec]
+    data_mapping: list[TargetMapping]
+
+    dataflow_edges: list[DataflowEdge]
+    view_name_map: dict[str, str]
+
+    unknown_components: list[UnknownComponent] = []
+    extensions: dict[str, Any] = Field(default_factory=dict)
+```
+
+**Zero-loss invariant**: union of every typed field + every `extensions` dict + `unknown_components[*].raw_dict` MUST cover every key/value in the lossless parse. Enforce with debug-mode assertion.
+
+---
+
+## 16. Project Layout
+
+```
+iics_to_yaml_converter/
+├── pyproject.toml
+├── README.md
+├── .env.example
+├── iics_to_yaml_converter/
+│   ├── __init__.py
+│   ├── api/
+│   │   ├── app.py
+│   │   └── schemas.py
+│   ├── ir/
+│   │   └── models.py
+│   ├── parser/
+│   │   ├── lossless.py
+│   │   ├── component_registry.py
+│   │   ├── source_handler.py
+│   │   ├── target_handler.py
+│   │   ├── mapping_handler.py
+│   │   ├── transformation_handlers.py
+│   │   ├── filter_intent_classifier.py
+│   │   ├── expression_router.py
+│   │   ├── expression_lexer.py
+│   │   ├── expression_translator.py
+│   │   ├── validation_extractor.py     # NEW: Section 8
+│   │   ├── local_variable_resolver.py  # NEW: Section 9
+│   │   ├── dataflow_graph.py
+│   │   ├── view_resolver.py
+│   │   └── validation_deriver.py       # Section 10 auto-derivation
+│   ├── llm/
+│   │   ├── client.py
+│   │   ├── prompts.py
+│   │   └── tools.py
+│   ├── generator/
+│   │   ├── yaml_writer.py
+│   │   └── templates/
+│   │       ├── mapping.yaml.j2
+│   │       └── partials/
+│   │           ├── source_metadata.yaml.j2
+│   │           ├── target_metadata.yaml.j2
+│   │           ├── data_extraction.yaml.j2
+│   │           ├── data_validation.yaml.j2
+│   │           ├── data_transformation.yaml.j2
+│   │           ├── data_load.yaml.j2
+│   │           └── data_mapping.yaml.j2
+│   ├── validator/
+│   │   ├── schema.py
+│   │   └── semantic.py
+│   ├── judge/
+│   │   ├── rubric.py
+│   │   ├── judge.py
+│   │   └── corrector.py
+│   ├── orchestrator/
+│   │   └── convert.py
+│   ├── config.py
+│   └── logging_setup.py
+├── tests/
+│   ├── conftest.py
+│   ├── fixtures/
+│   │   ├── input/
+│   │   │   ├── m_full_pipeline.XML
+│   │   │   ├── m_snowflake_to_file.XML
+│   │   │   ├── m_snowflake_to_file_v2.XML
+│   │   │   └── m_WD_EMPLOYEE_MASTER.XML
+│   │   └── golden/
+│   │       ├── full_pipeline.yaml
+│   │       ├── snowflake_to_file.yaml
+│   │       ├── snowflake_to_file_v2.yaml
+│   │       └── employee_master.yaml
+│   ├── test_lossless.py
+│   ├── test_component_handlers.py
+│   ├── test_filter_intent.py
+│   ├── test_expression_router.py
+│   ├── test_expression_translator.py
+│   ├── test_validation_extractor.py
+│   ├── test_local_variable_resolver.py
+│   ├── test_dataflow_graph.py
+│   ├── test_view_resolver.py
+│   ├── test_validation_deriver.py
+│   ├── test_generator.py
+│   ├── test_validator.py
+│   ├── test_judge.py
+│   ├── test_orchestrator_golden.py
+│   └── test_api.py
+```
+
+---
+
+## 17. FastAPI Service
+
+```
+POST /convert
+  Body: multipart/form-data with field `file` (XML)
+  Query (optional): ?verbose=true to include audit JSON
+  Response (default): 200 OK, application/x-yaml, YAML body
+                      Header X-Conversion-Warnings: <count>
+  Response (verbose): 200 OK, application/json:
+                      {"yaml": "...", "audit": {...}}
+  Errors:
+    - 400 if not valid XML or root != POWERMART
+    - 422 if STRICT_MODE=true and judge fails after MAX_CORRECTION_ROUNDS
+    - 500 on unexpected errors
+
+GET /healthz
+  200 OK, {"status": "ok"}
+```
+
+Audit (verbose mode) includes: phase timings, deterministic-vs-LLM component breakdown, per-Expression field-routing summary, view_name_map, validation rules with origin/source, LLM call counts per tool, list of UnknownComponents with confidence, judge rounds + final verdict, extensions key inventory.
+
+---
+
+## 18. .env.example
+
+```dotenv
+GROQ_API_KEY=
+GROQ_BASE_URL=https://api.groq.com/openai/v1
+LLM_MODEL=openai/gpt-oss-120b
+LLM_TEMPERATURE=0.0
+LLM_MAX_TOKENS=4096
+LLM_TIMEOUT_SECONDS=60
+
+STRICT_MODE=false
+STRICT_CLASSIFICATION=false
+DERIVE_VALIDATION_RULES=true
+MAX_CORRECTION_ROUNDS=3
+
+LOG_LEVEL=INFO
+LOG_FORMAT=json
+```
+
+---
+
+## 19. Tests (Definition of Done)
+
+1. **Golden tests** (`test_orchestrator_golden.py`): for each of the 4 input XML fixtures, run the orchestrator with the Groq client mocked. Parse both produced and golden YAML with ruamel and compare as dicts. Deep equality required. **The employee_master fixture is the most important test case.**
+2. **Lossless parser tests**: round-trip preserves all content.
+3. **Component handler tests**: each handler produces expected IR from synthetic XML.
+4. **Filter intent tests**: each row of Section 6 table, plus 3 LLM-fallback cases (mocked).
+5. **Expression router tests**: each row of the routing decision table + `New` vs `Replace` logic.
+6. **Expression translator tests**: every row of Section 7, plus nested patterns from real customer files (e.g. `IIF(NOT ISNULL(TERMINATION_DT), IIF(NOT ISNULL(REHIRE_DT), ...))`). Verify `mm → MM` in date formats. Verify `LTRIM(RTRIM(x))` collapses to `trim(x)`.
+7. **Validation extractor tests** (NEW): given the `DECODE(TRUE, ISNULL(EMPLID), 'INVALID', EMPLID='EMPLID', 'INVALID', 'VALID')` pattern from the real customer file, verify it decomposes into NOT_NULL + CUSTOM rules. LLM-fallback cases mocked.
+8. **Local variable resolver tests** (NEW): mapplet-style Expression with v_* variables → expected sequence of calculated columns in declaration order.
+9. **Dataflow graph tests**: synthetic mapping with 5 INSTANCEs, 12 CONNECTORs → expected topo order. Cycle → fatal error.
+10. **View resolver tests**: each row of Section 4 table.
+11. **Validation deriver tests**: SOURCEFIELD with `KEYTYPE="PRIMARY KEY"` + `NULLABLE="NOTNULL"` → one NOT_NULL rule (not duplicated). Per-source ROW_COUNT always emitted. Dedup against XML-extracted rules works correctly.
+12. **Generator tests**: each Jinja partial produces expected YAML. Verify block style everywhere.
+13. **Validator tests**: schema accepts all 4 goldens; rejects deliberately broken samples.
+14. **Judge tests**: mocked LLM verifies corrector loop iterates correctly.
+15. **API tests**: TestClient uploads each fixture, asserts 200 + semantic match.
+16. **Zero-loss invariant test**: parse the largest fixture, dump the IR, assert every leaf in the lossless dict is reachable in the IR.
+
+The three original input XML fixtures must be hand-authored. `m_WD_EMPLOYEE_MASTER.XML` is the real customer file (provided separately).
+
+---
+
+## 20. Acceptance Criteria
+
+- [ ] `uv sync` succeeds on a clean Python 3.11 environment.
+- [ ] `uvicorn iics_to_yaml_converter.api.app:app --reload` starts the service.
+- [ ] `curl -F file=@tests/fixtures/input/m_WD_EMPLOYEE_MASTER.XML http://localhost:8000/convert -o out.yaml` produces a YAML semantically equal to `tests/fixtures/golden/employee_master.yaml`.
+- [ ] All tests pass: `pytest -v`.
+- [ ] An unknown TRANSFORMATION TYPE (e.g. `Java`, `Mapplet`) does NOT crash — routed through `translate_unknown_component`, surfaced in `extensions`, listed in verbose audit.
+- [ ] The judge corrects a deliberately broken intermediate YAML within `MAX_CORRECTION_ROUNDS`.
+- [ ] Zero-loss invariant test passes.
+- [ ] The employee_master fixture produces a `dataValidationRef` block with NOT_NULL rules extracted from the DECODE pattern, AND keeps the Header calc + fil_HEADER filter intact (round-trip fidelity).
+- [ ] No `dataCleansingRef` block appears (cleansing folded into `calculatedColumnsRef` with `columnCategory: Replace`).
+- [ ] No `mappletRef` block appears (mapplets go to `UnknownComponent`).
+- [ ] No `dd/mm` or `mm/dd` date formats with lowercase `mm` in any `expression:` field.
+- [ ] No `IIF` / `DECODE` / `ISNULL` / `DD_REJECT` strings in any emitted `expression:` field.
+- [ ] No secrets in committed code.
+
+---
+
+## 21. Implementation Order
+
+1. Scaffold + `pyproject.toml` + `.env.example` + README skeleton.
+2. Pydantic IR models (Section 15) with `extensions` everywhere.
+3. Lossless XML parser. Test round-trip.
+4. Embed 4 golden YAMLs at `tests/fixtures/golden/`. Hand-author 3 input XMLs.
+5. View resolver (Section 4). Tests.
+6. Component handlers for SOURCE/TARGET/MAPPING and each TRANSFORMATION TYPE in Section 3.4.
+7. Filter intent classifier (Section 6).
+8. Expression lexer + translator + FUNCTION_MAP (Section 7).
+9. Expression router (per-field routing).
+10. **Validation extractor (Section 8)** — NEW.
+11. **Local variable resolver (Section 9)** — NEW.
+12. Auto-derived validation (Section 10) with dedup.
+13. Dataflow graph builder + topological sort.
+14. Router and UpdateStrategy handlers.
+15. Transformation execution sequence assembler (Section 12.3).
+16. Jinja2 templates + YAML writer. Block style only. Per-partial tests.
+17. Orchestrator wiring Phases 1-6. Golden round-trip tests with LLM mocked.
+18. Groq client + tool integration for all 5 LLM fallbacks.
+19. JSON Schema + semantic validator.
+20. LLM-as-judge module + corrector loop (Phase 7).
+21. FastAPI `/convert` + `/healthz`. API tests.
+22. README with curl examples, Mermaid diagram of the seven-phase pipeline, view-name resolution walkthrough, validation extraction explanation, and extensibility guide.
+
+---
+
+## 22. Style & Quality Bar
+
+- Type hints everywhere. `mypy --strict` should pass with minimal `# type: ignore`.
+- Google-style docstrings on every public function/class.
+- No print. Use structlog.
+- No bare `except`. Catch specific exceptions.
+- Idempotency: same XML → identical YAML, every time (temperature 0.0).
+- Small functions (≤40 lines), named constants, readability over cleverness.
+
+---
+
+## 23. Before Coding
+
+If anything is genuinely ambiguous, batch your questions and ask once. Otherwise proceed straight to scaffolding.
+
+When you finish, output:
+1. Module-by-module summary, one line each.
+2. Exact commands to run tests and start the service.
+3. Any deviations from this spec, with rationale.
+
+Begin.
