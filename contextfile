@@ -730,7 +730,32 @@ Thanks, bye.
 
 Naveen Kumar Vishwanatham(UST,IN) stopped transcription
 
+## Data validation issues Akhil flagged
 
+The submitted YAML is missing the entire data validation block that exists in the source XML. Specifically, rules like *NOT NULL* on `employee TFS ID`, additive conditions, and count checks were defined in the XML but aren't carried over. Akhil was clear this isn't optional in the execution flow — after extraction, the orchestrator calls a dedicated validation module that runs each rule against the loaded dataframe, so without these the run won't behave correctly.
+
+A few mechanics he spelled out:
+
+- Each rule needs a **column ID** tied to a source column. If the referenced column isn't present in the dataframe, the rule is silently skipped — that's why missing columns matter.
+- Severity is either **warning** (logs and continues) or **error** (stops the pipeline and fails the run). Arjun emphasized this must mirror the XML — if the XML marks something as error, the YAML must too, otherwise extraction behavior diverges.
+- The block isn't strictly mandatory at the file level. You can set `isActive: false` to skip validation entirely, but if the XML defines validations they should be carried over.
+
+Sidharth and Akhil also noted related extraction-side gaps that interact with validation: file type, delimiter, and CSV-specific extraction config were missing, and the `dataLoad` reference (schema, target table name, load mode like insert / truncate-and-insert, database type such as MSSQL) was absent — these need to be in place for validation and load to run end-to-end.
+
+## How mapplets are being handled right now
+
+Short answer: they aren't yet. Nivya asked for a reference file covering all keys, including the new `routerMap` and mapplet constructs in the newer XMLs. Akhil's response was that for the next two XML files containing router and mapplets, **the schema is still being defined** — it hasn't been finalized or confirmed. He's actively working on converting those XMLs to YAML and said once that's complete he can share it as a reference that the team can use for the third file.
+
+## How the converter should represent a mapplet instance in the output YAML
+
+There is no agreed-upon representation yet — that's the open item. Until Akhil publishes the finalized schema, the practical path forward is one of:
+
+1. **Wait for Akhil's reference.** He committed to providing the exact schema for mapplets and router once his enhancement work on those XMLs is done. That will be the authoritative format.
+2. **Send him a sample upstream.** He explicitly invited this: "if you have that schema, just provide a sample. So we can make some work on that and provide the exact schema." If the converter team drafts a candidate representation for a mapplet instance and shares it, Akhil can confirm or correct it rather than the team blocking.
+
+Structurally, based on how the existing YAML treats reusable references (e.g. the `routerRef` block already in the file with `items` listing each router by name, source, groups, and conditions; or `updateStrategyRef` listing each update strategy with its operation and expression), a reasonable starting shape for a mapplet would mirror that pattern — a `mappletRef` block with `isActive` and an `items` list, where each item carries the mapplet instance name, the underlying mapplet definition it refers to, its input port bindings, and its output port bindings. But treat that as a strawman to validate with Akhil, not a spec — he was clear the schema isn't confirmed.
+
+If you want, I can draft a concrete strawman `mappletRef` block based on the conventions already in the YAML, suitable for sending to Akhil for review.
 
 
 1 Like reaction.
