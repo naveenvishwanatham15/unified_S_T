@@ -1,0 +1,33 @@
+Talent Profile – MLOps Engineer
+1 x FTE | Fixed-term 6 month contract with possibility of extension | On-shore
+Hiring team	Data Science & Analytics	Hiring managers	Robert Franklin + John Blundell
+Role type	IT augment / fixed-term contractor	Location	On-shore; UK hybrid pattern to be confirmed
+Tooling	Azure + Databricks	Start	As soon as available / onboarding complete
+
+Role purpose
+•	Provide on-shore MLOps engineering capability to operationalise completed Data Science models through the Boots model deployment framework.
+•	Initially flex across MLOps, data engineering and platform tasks while the team and operating model mature.
+•	End goal: take completed models from Data Scientists, run them through the deployment framework, then monitor them over time.
+Core responsibilities
+•	Work with Data Scientists to package completed models and prepare deployment-ready artefacts, configuration and documentation.
+•	Build/adapt Databricks jobs, workflows, notebooks and pipelines for batch scoring, model outputs and, where required, serving patterns.
+•	Support early data engineering needs: PySpark/Python pipelines, SQL, feature tables, model input/output tables, validation and data quality checks.
+•	Implement model monitoring covering job health, failures, data/output checks, model performance indicators and alerting where available.
+•	Maintain CI/CD, Git-based development and controlled environment promotion in Azure/Databricks aligned to Boots platform standards.
+•	Collaborate with Data Lynx Platform Engineering, DevOps, Cloud/CCoE, RunOps and security teams on RBAC, secrets, access and operational handover.
+•	Create concise runbooks for deployment, monitoring, troubleshooting, rollback considerations and support ownership.
+Skills, experience and assessment
+Essential	Desirable	Interview focus
+Azure; Databricks; Python; PySpark; SQL; Databricks Jobs/Workflows; Delta/Lakehouse concepts; CI/CD; operational ML lifecycle; ability to bridge Data Science and production engineering.	MLflow/model registry; Unity Catalog; Databricks Model Serving; Azure DevOps pipelines; Terraform/Bicep; observability; retail/personalisation/forecasting/recommendation use cases; ITSM/runbooks.	How they productionise a notebook/model artefact; monitoring design; data engineering examples; CI/CD across environments; RBAC/secrets/security; handover into support.
+
+Key deliverables and success measures
+•	Repeatable route for receiving completed models and preparing them for deployment through the MLOps framework.
+•	Deployment-ready Databricks workflows/jobs and configuration for priority models.
+•	Monitoring approach for operational health, failures, data quality/output anomalies and ongoing model performance where data is available.
+•	Feature/input/output tables and validation logic needed to support model execution.
+•	Runbooks and support artefacts enabling transition from Data Science development to operational support.
+•	Reusable improvements that reduce bespoke effort for future model deployments.
+Candidate profile summary for suppliers
+•	Look for an engineer who has genuinely deployed and operated ML workloads, not just built models. They must be comfortable doing some data engineering while the capability ramps up.
+•	Must be on-shore and able to work closely with Data Science & Analytics, Data Lynx, platform, DevOps and security stakeholders in a governed enterprise environment.
+
